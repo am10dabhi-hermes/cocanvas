@@ -21,7 +21,40 @@ import { resolveUpdateStatus, type UpdateStatus } from "./update-status.js";
 const AGENT_SETUP_URL = "https://roughdraft.md/setup.md";
 const ROUGHDRAFT_FLAVORED_MARKDOWN_SPEC_URL =
   "https://roughdraft.md/spec/roughdraft-flavored-markdown.md";
-const AGENT_SETUP_PROMPT = `Install Roughdraft for me using \`npm i -g roughdraft\`, then read ${AGENT_SETUP_URL} and set yourself up to use it.`;
+
+export interface CliNaming {
+  programName: string;
+  productName: string;
+  installCommand: string;
+  setupUrl: string;
+}
+
+const DEFAULT_NAMING: CliNaming = {
+  programName: "roughdraft",
+  productName: "Roughdraft",
+  installCommand: "npm i -g roughdraft",
+  setupUrl: AGENT_SETUP_URL,
+};
+
+const NAMING_BY_BINARY: Record<string, CliNaming> = {
+  roughdraft: DEFAULT_NAMING,
+  cocanvas: {
+    programName: "cocanvas",
+    productName: "CoCanvas",
+    installCommand: "npm i -g cocanvas",
+    setupUrl: "https://github.com/am10dabhi-hermes/cocanvas#readme",
+  },
+};
+
+function resolveNaming(binaryName: string | undefined): CliNaming {
+  if (!binaryName) return DEFAULT_NAMING;
+  return NAMING_BY_BINARY[binaryName] ?? DEFAULT_NAMING;
+}
+
+function buildAgentSetupPrompt(naming: CliNaming): string {
+  return `Install ${naming.productName} for me using \`${naming.installCommand}\`, then read ${naming.setupUrl} and set yourself up to use it.`;
+}
+
 const STATUS_PATH = "/api/status";
 const STATUS_TIMEOUT_MS = 750;
 const SERVER_WAIT_ATTEMPTS = 40;
@@ -76,6 +109,7 @@ export interface SpawnedServer {
 }
 
 export interface CliDependencies {
+  binaryName?: string;
   env: NodeJS.ProcessEnv;
   cwd: string;
   fetchImpl: typeof fetch;
@@ -730,6 +764,7 @@ export function createCliDependencies(
   const fetchImpl = overrides.fetchImpl ?? fetch;
 
   return {
+    binaryName: overrides.binaryName,
     env: overrides.env ?? process.env,
     cwd: overrides.cwd ?? process.cwd(),
     fetchImpl,
@@ -759,12 +794,14 @@ async function printUpdateNoticeIfAvailable(deps: CliDependencies) {
   } catch {}
 }
 
-function printHelp(log: (message: string) => void) {
-  log("Roughdraft is a local Markdown review app for AI-assisted workflows.");
+function printHelp(log: (message: string) => void, naming = DEFAULT_NAMING) {
+  log(
+    `${naming.productName} is a local-first collaborative canvas for AI-assisted Markdown and HTML review.`,
+  );
   log("");
   log("Usage:");
-  log("  roughdraft [flags] <command> [args]");
-  log("  roughdraft <path>");
+  log(`  ${naming.programName} [flags] <command> [args]`);
+  log(`  ${naming.programName} <path>`);
   log("");
   log("Commands:");
   log(
@@ -788,25 +825,27 @@ function printHelp(log: (message: string) => void) {
   log("  --no-color         Disable color");
   log("");
   log("Examples:");
-  log("  roughdraft open ./draft.md");
-  log("  roughdraft open ./draft.md --print-url");
-  log("  roughdraft open ./draft.md --json");
-  log("  roughdraft open ./draft.md --no-watch");
-  log("  roughdraft watch ./draft.md --json");
-  log("  roughdraft status --json");
+  log(`  ${naming.programName} open ./draft.md`);
+  log(`  ${naming.programName} open ./page.html`);
+  log(`  ${naming.programName} open ./draft.md --print-url`);
+  log(`  ${naming.programName} open ./draft.md --json`);
+  log(`  ${naming.programName} open ./draft.md --no-watch`);
+  log(`  ${naming.programName} watch ./draft.md --json`);
+  log(`  ${naming.programName} status --json`);
   log("");
-  log(`Agent setup: ${AGENT_SETUP_URL}`);
-  log("Use `roughdraft help agent` for a copyable setup prompt.");
+  log(`Agent setup: ${naming.setupUrl}`);
+  log(`Use \`${naming.programName} help agent\` for a copyable setup prompt.`);
 }
 
 function printCommandHelp(
   command: KnownCommand,
   log: (message: string) => void,
+  naming = DEFAULT_NAMING,
 ) {
   if (command === "open") {
     log("Usage:");
     log(
-      "  roughdraft open <path> [--no-open] [--no-watch] [--print-url] [--port <port>]",
+      `  ${naming.programName} open <path> [--no-open] [--no-watch] [--print-url] [--port <port>]`,
     );
     log("");
     log(
@@ -853,7 +892,7 @@ function printCommandHelp(
 
   if (command === "start") {
     log("Usage:");
-    log("  roughdraft start [--port <port>] [--json]");
+    log(`  ${naming.programName} start [--port <port>] [--json]`);
     log("");
     log("Starts or reuses the background Roughdraft server.");
     log("");
@@ -867,7 +906,7 @@ function printCommandHelp(
 
   if (command === "status") {
     log("Usage:");
-    log("  roughdraft status [--json]");
+    log(`  ${naming.programName} status [--json]`);
     log("");
     log("Shows whether Roughdraft is running.");
     log("");
@@ -880,7 +919,7 @@ function printCommandHelp(
 
   if (command === "stop") {
     log("Usage:");
-    log("  roughdraft stop [--all]");
+    log(`  ${naming.programName} stop [--all]`);
     log("");
     log("Stops the managed background Roughdraft server.");
     log("");
@@ -895,7 +934,7 @@ function printCommandHelp(
 
   if (command === "watch") {
     log("Usage:");
-    log("  roughdraft watch <path> [--json] [--timeout <seconds>]");
+    log(`  ${naming.programName} watch <path> [--json] [--timeout <seconds>]`);
     log("");
     log(
       "Waits until Roughdraft receives Done Reviewing for one Markdown file.",
@@ -919,7 +958,7 @@ function printCommandHelp(
 
   if (command === "mcp") {
     log("Usage:");
-    log("  roughdraft mcp");
+    log(`  ${naming.programName} mcp`);
     log("");
     log("Starts Roughdraft's experimental stdio MCP server.");
     return;
@@ -927,7 +966,7 @@ function printCommandHelp(
 
   if (command === "doctor") {
     log("Usage:");
-    log("  roughdraft doctor [path] [--json]");
+    log(`  ${naming.programName} doctor [path] [--json]`);
     log("");
     log(
       "Diagnoses local Roughdraft setup and server state, or validates one Markdown file.",
@@ -941,24 +980,27 @@ function printCommandHelp(
   }
 
   if (command === "help") {
-    printHelp(log);
+    printHelp(log, naming);
     return;
   }
 
   if (command === "agent-setup") {
-    printAgentHelp(log);
+    printAgentHelp(log, naming);
     return;
   }
 
   printCriticMarkupHelp(log);
 }
 
-function printAgentHelp(log: (message: string) => void) {
+function printAgentHelp(
+  log: (message: string) => void,
+  naming = DEFAULT_NAMING,
+) {
   log("To set up your coding agent, paste this into it:");
   log("");
-  log(AGENT_SETUP_PROMPT);
+  log(buildAgentSetupPrompt(naming));
   log("");
-  log(`Live setup instructions: ${AGENT_SETUP_URL}`);
+  log(`Live setup instructions: ${naming.setupUrl}`);
   log("");
   log(
     "This command only prints setup text. It does not edit agent instruction files.",
@@ -2129,6 +2171,7 @@ export async function runCli(
   overrides: Partial<CliDependencies> = {},
 ): Promise<number> {
   let deps = createCliDependencies(overrides);
+  const naming = resolveNaming(deps.binaryName);
   let parsed: ParsedCli;
   let shouldPrintUpdateNotice = false;
 
@@ -2146,7 +2189,7 @@ export async function runCli(
     }
 
     if (!parsed.command) {
-      printHelp(deps.log);
+      printHelp(deps.log, naming);
       return 0;
     }
 
@@ -2158,12 +2201,12 @@ export async function runCli(
       }
 
       if (!topic) {
-        printHelp(deps.log);
+        printHelp(deps.log, naming);
         return 0;
       }
 
       if (topic === "agent") {
-        printAgentHelp(deps.log);
+        printAgentHelp(deps.log, naming);
         return 0;
       }
 
@@ -2173,7 +2216,7 @@ export async function runCli(
       }
 
       if (isKnownCommand(topic)) {
-        printCommandHelp(topic, deps.log);
+        printCommandHelp(topic, deps.log, naming);
         return 0;
       }
 
@@ -2198,7 +2241,7 @@ export async function runCli(
     }
 
     if (parsed.global.help) {
-      printCommandHelp(command as KnownCommand, deps.log);
+      printCommandHelp(command as KnownCommand, deps.log, naming);
       return 0;
     }
 
@@ -2210,7 +2253,7 @@ export async function runCli(
 
     if (command === "agent-setup") {
       shouldPrintUpdateNotice = true;
-      printAgentHelp(deps.log);
+      printAgentHelp(deps.log, naming);
       return 0;
     }
 
@@ -2224,7 +2267,7 @@ export async function runCli(
       }
 
       if (options.help) {
-        printCommandHelp("start", deps.log);
+        printCommandHelp("start", deps.log, naming);
         return 0;
       }
 
@@ -2280,7 +2323,7 @@ export async function runCli(
       }
 
       if (options.help) {
-        printCommandHelp("status", deps.log);
+        printCommandHelp("status", deps.log, naming);
         return 0;
       }
 
@@ -2339,7 +2382,7 @@ export async function runCli(
       }
 
       if (options.help) {
-        printCommandHelp("stop", deps.log);
+        printCommandHelp("stop", deps.log, naming);
         return 0;
       }
 
@@ -2513,7 +2556,7 @@ export async function runCli(
       }
 
       if (options.help) {
-        printCommandHelp("watch", deps.log);
+        printCommandHelp("watch", deps.log, naming);
         return 0;
       }
 
@@ -2537,7 +2580,7 @@ export async function runCli(
         return USAGE_ERROR;
       }
       if (options.help) {
-        printCommandHelp("mcp", deps.log);
+        printCommandHelp("mcp", deps.log, naming);
         return 0;
       }
       if (options.positionals.length > 0) {
@@ -2560,7 +2603,7 @@ export async function runCli(
       }
 
       if (options.help) {
-        printCommandHelp("doctor", deps.log);
+        printCommandHelp("doctor", deps.log, naming);
         return 0;
       }
 
@@ -2593,7 +2636,7 @@ export async function runCli(
       }
 
       if (options.help) {
-        printCommandHelp("open", deps.log);
+        printCommandHelp("open", deps.log, naming);
         return 0;
       }
 

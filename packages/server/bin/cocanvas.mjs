@@ -2,5 +2,7 @@
 
 import { runCli } from "../dist/cli.js";
 
-const exitCode = await runCli(process.argv.slice(2));
+const exitCode = await runCli(process.argv.slice(2), {
+  binaryName: "cocanvas",
+});
 process.exit(exitCode);

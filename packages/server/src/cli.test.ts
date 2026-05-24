@@ -1283,6 +1283,47 @@ describe("cli", () => {
     );
   });
 
+  it("brands top-level help as CoCanvas when invoked via the cocanvas binary", async () => {
+    const test = createTestDependencies();
+
+    const exitCode = await runCli(["help"], {
+      ...test.deps,
+      binaryName: "cocanvas",
+    });
+
+    expect(exitCode).toBe(0);
+    const joined = test.logs.join("\n");
+    expect(joined).toContain(
+      "CoCanvas is a local-first collaborative canvas for AI-assisted Markdown and HTML review.",
+    );
+    expect(joined).toContain("  cocanvas [flags] <command> [args]");
+    expect(joined).toContain("  cocanvas open ./page.html");
+    expect(joined).toContain(
+      "Agent setup: https://github.com/am10dabhi-hermes/cocanvas#readme",
+    );
+    expect(joined).toContain(
+      "Use `cocanvas help agent` for a copyable setup prompt.",
+    );
+    expect(joined).not.toContain("roughdraft [flags]");
+  });
+
+  it("emits a CoCanvas agent setup prompt when invoked via the cocanvas binary", async () => {
+    const test = createTestDependencies();
+
+    const exitCode = await runCli(["help", "agent"], {
+      ...test.deps,
+      binaryName: "cocanvas",
+    });
+
+    expect(exitCode).toBe(0);
+    expect(test.logs).toContain(
+      "Install CoCanvas for me using `npm i -g cocanvas`, then read https://github.com/am10dabhi-hermes/cocanvas#readme and set yourself up to use it.",
+    );
+    expect(test.logs).toContain(
+      "Live setup instructions: https://github.com/am10dabhi-hermes/cocanvas#readme",
+    );
+  });
+
   it("keeps CLAUDE.md as a short compatibility shim to AGENTS.md", () => {
     const claudePath = path.join(serverRoot, "CLAUDE.md");
     const claude = fs.readFileSync(claudePath, "utf8");
