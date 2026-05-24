@@ -1,3 +1,37 @@
+export { parseAnnotatedHtml } from "./html/parse.js";
+export { serializeAnnotatedHtml } from "./html/serialize.js";
+export { sanitizeAnnotatedHtml } from "./html/sanitize.js";
+export type {
+  HtmlSanitizerWarning,
+  SanitizeAnnotatedHtmlResult,
+} from "./html/sanitize.js";
+export {
+  acceptHtmlSuggestion,
+  addHtmlComment,
+  editHtmlComment,
+  rejectHtmlSuggestion,
+  removeHtmlComment,
+} from "./html/mutate.js";
+export type {
+  AddHtmlCommentAnchor,
+  AddHtmlCommentInput,
+  EditHtmlCommentInput,
+  RemoveHtmlCommentInput,
+  SuggestionMutationInput,
+} from "./html/mutate.js";
+export type {
+  AnnotatedHtmlDoc,
+  HtmlAnnotationComment,
+  HtmlAnnotationSuggestion,
+  HtmlAnnotationWarning,
+  HtmlCommentStatus,
+  HtmlElementNode,
+  HtmlNode,
+  HtmlSuggestionKind,
+  HtmlSuggestionStatus,
+  HtmlTextNode,
+} from "./html/types.js";
+
 export type RfmDiagnosticSeverity = "error" | "warning";
 
 export interface RfmDiagnostic {

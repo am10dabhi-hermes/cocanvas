@@ -1,7 +1,10 @@
+export type RequestedDocumentKind = "markdown" | "html";
+
 interface RequestedPathState {
   rawPath: string | null;
   projectPath: string | null;
   documentPath: string | null;
+  documentKind: RequestedDocumentKind | null;
 }
 
 export type DocumentEditorViewMode = "rich-text" | "code";
@@ -49,15 +52,36 @@ export function getDocumentEditorViewModeFromLocation(
   return fallbackMode;
 }
 
+function requestedDocumentKindFromPath(
+  normalizedPath: string,
+): RequestedDocumentKind | null {
+  const lower = normalizedPath.toLowerCase();
+  if (lower.endsWith(".md")) return "markdown";
+  if (lower.endsWith(".html") || lower.endsWith(".htm")) return "html";
+  return null;
+}
+
 export function getRequestedPathState(): RequestedPathState {
   const rawPath = getRawPathFromLocation();
   if (!rawPath) {
-    return { rawPath: null, projectPath: null, documentPath: null };
+    return {
+      rawPath: null,
+      projectPath: null,
+      documentPath: null,
+      documentKind: null,
+    };
   }
 
   const normalizedPath = normalizePathSeparators(rawPath);
-  if (!normalizedPath.toLowerCase().endsWith(".md")) {
-    return { rawPath, projectPath: rawPath, documentPath: null };
+  const documentKind = requestedDocumentKindFromPath(normalizedPath);
+
+  if (!documentKind) {
+    return {
+      rawPath,
+      projectPath: rawPath,
+      documentPath: null,
+      documentKind: null,
+    };
   }
 
   const lastSlashIndex = Math.max(
@@ -68,7 +92,7 @@ export function getRequestedPathState(): RequestedPathState {
     lastSlashIndex >= 0 ? rawPath.slice(0, lastSlashIndex) || "/" : ".";
   const documentPath = rawPath.slice(lastSlashIndex + 1);
 
-  return { rawPath, projectPath, documentPath };
+  return { rawPath, projectPath, documentPath, documentKind };
 }
 
 export function formatWorkspacePathForDisplay(path?: string | null) {

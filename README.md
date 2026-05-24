@@ -161,6 +161,27 @@ my-essay/
 ```
 
 Roughdraft reads and writes the markdown file directly.
+
+### HTML files (MVP)
+
+Roughdraft also opens annotated HTML documents directly:
+
+```bash
+roughdraft open ./path/to/page.html
+```
+
+HTML review uses the annotation contract recorded in
+`docs/adr/0005-html-review-annotation-contract.md`:
+
+- Comment anchors are a single `<mark data-rd-comment-ids="…">…</mark>` with one or more space-separated ids.
+- Comment records live in an `<aside class="rd-review" hidden>` at the end of `<body>` as `<rd-comment id="…">…</rd-comment>` elements.
+- Suggestions are `<ins>` / `<del>` (or both with a shared `data-rd-suggestion-id`) for insertion, deletion, and substitution.
+- Protected zones — `<script>`, `<style>`, `<pre>`, `<code>`, and `data-rd-literal` — are never rewritten.
+
+MCP tools that operate on annotated HTML files: `roughdraft_read_html_document`,
+`roughdraft_add_comment`, `roughdraft_accept_suggestion`, `roughdraft_reject_suggestion`.
+A captured end-to-end transcript lives at `.context/mcp-evidence/G6.4-agent-flow.transcript.md`.
+
 ## Agent setup
 If you want your local agent to remember the Roughdraft workflow, ask it to read the live setup prompt:
 

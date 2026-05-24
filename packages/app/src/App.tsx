@@ -44,6 +44,7 @@ import {
   DialogTrigger,
 } from "./components/ui/dialog";
 import { DocumentWorkspace } from "./DocumentWorkspace";
+import { HtmlDocumentWorkspace } from "./editor/html/HtmlDocumentWorkspace";
 import {
   getCommentAnchorMeasurements,
   groupCommentAnchorMeasurements,
@@ -1588,6 +1589,12 @@ export function App() {
 
         if (cancelled) return;
 
+        if (requestedPathState.documentKind === "html") {
+          setActiveDocumentPath(requestedPathState.documentPath);
+          setLoading(false);
+          return;
+        }
+
         await loadDocument(detectedBackend, requestedPathState.documentPath);
         if (cancelled) return;
 
@@ -1609,6 +1616,7 @@ export function App() {
     };
   }, [
     loadDocument,
+    requestedPathState.documentKind,
     requestedPathState.documentPath,
     requestedPathState.projectPath,
     requestedPathState.rawPath,
@@ -1795,6 +1803,7 @@ export function App() {
 
   useEffect(() => {
     if (!backend?.watchMarkdownFile || !activeDocumentPath) return;
+    if (requestedPathState.documentKind === "html") return;
 
     let disposed = false;
     const stopWatching = backend.watchMarkdownFile(
@@ -1843,7 +1852,13 @@ export function App() {
       disposed = true;
       stopWatching();
     };
-  }, [activeDocumentPath, applyDocumentPage, backend, documentDiskChangeState]);
+  }, [
+    activeDocumentPath,
+    applyDocumentPage,
+    backend,
+    documentDiskChangeState,
+    requestedPathState.documentKind,
+  ]);
 
   const handleDocumentEditorViewModeChange = useCallback(
     (nextMode: DocumentEditorViewMode) => {
@@ -1883,6 +1898,30 @@ export function App() {
         message={loadError ?? <HomepageSubtitle />}
         updateStatus={updateStatus}
       />
+    );
+  }
+
+  if (
+    requestedPathState.documentKind === "html" &&
+    requestedPathState.documentPath
+  ) {
+    return (
+      <main className="relative flex h-screen min-w-0 flex-col overflow-hidden bg-[#FCFCFC] dark:bg-background text-slate-950 dark:text-slate-50">
+        {updateStatus ? (
+          <div className="pointer-events-none absolute top-4 right-4 z-40 max-w-sm">
+            <div className="pointer-events-auto">
+              <UpdateNotice updateStatus={updateStatus} />
+            </div>
+          </div>
+        ) : null}
+        <HtmlDocumentWorkspace
+          documentPath={requestedPathState.documentPath}
+          projectPath={
+            backend?.info.projectPath ?? requestedPathState.projectPath
+          }
+          absolutePath={requestedPathState.rawPath}
+        />
+      </main>
     );
   }
 

@@ -5,7 +5,13 @@ import { createServer as createHttpServer } from "node:http";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import fs from "node:fs";
-import { extractRoughdraftReviewIndex } from "@roughdraft/rfm";
+import {
+  extractRoughdraftReviewIndex,
+  parseAnnotatedHtml,
+  sanitizeAnnotatedHtml,
+  serializeAnnotatedHtml,
+} from "@roughdraft/rfm";
+import type { AnnotatedHtmlDoc, HtmlSanitizerWarning } from "@roughdraft/rfm";
 import {
   ROUGHDRAFT_DEFAULT_PORT,
   ROUGHDRAFT_PUBLIC_HOST,
@@ -189,6 +195,69 @@ function markdownPageFromFile(
 
 function pageIdFromRelativePath(relativePath: string): string {
   return relativePath.replace(/\.md$/i, "").split(path.sep).join("/");
+}
+
+function htmlPageIdFromRelativePath(relativePath: string): string {
+  return relativePath
+    .replace(/\.html?$/i, "")
+    .split(path.sep)
+    .join("/");
+}
+
+function decodeHtmlEntities(value: string): string {
+  return value
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .replaceAll("&quot;", '"')
+    .replaceAll("&#39;", "'")
+    .replaceAll("&apos;", "'")
+    .replaceAll("&amp;", "&");
+}
+
+function titleFromHtmlContent(sanitizedHtml: string, fallback: string): string {
+  const titleMatch = sanitizedHtml.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  if (titleMatch?.[1]) {
+    const text = decodeHtmlEntities(titleMatch[1]).trim();
+    if (text.length > 0) return text;
+  }
+
+  const h1Match = sanitizedHtml.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+  if (h1Match?.[1]) {
+    const stripped = h1Match[1].replace(/<[^>]*>/g, "");
+    const text = decodeHtmlEntities(stripped).trim();
+    if (text.length > 0) return text;
+  }
+
+  return fallback;
+}
+
+interface HtmlFileResponse {
+  id: string;
+  title: string;
+  content: string;
+  version: string;
+  document: AnnotatedHtmlDoc;
+  sanitizerWarnings: HtmlSanitizerWarning[];
+}
+
+function htmlPageFromFile(
+  relativePath: string,
+  absolutePath: string,
+): HtmlFileResponse {
+  const raw = fs.readFileSync(absolutePath, "utf-8");
+  const stats = fs.statSync(absolutePath);
+  const sanitized = sanitizeAnnotatedHtml(raw);
+  const document = parseAnnotatedHtml(sanitized.html);
+  const fallbackTitle = path.basename(relativePath, path.extname(relativePath));
+
+  return {
+    id: htmlPageIdFromRelativePath(relativePath),
+    title: titleFromHtmlContent(sanitized.html, fallbackTitle),
+    content: sanitized.html,
+    version: fileVersionFromContent(stats, raw),
+    document,
+    sanitizerWarnings: sanitized.warnings,
+  };
 }
 
 function nextUntitledId(projectDir: string): string {
@@ -556,6 +625,91 @@ export function createApp(options: CreateAppOptions = {}): CreateAppResult {
     }
 
     res.json(markdownPageFromFile(relativePath, absolutePath));
+  });
+
+  app.get("/api/html-file", (req, res) => {
+    const projectDir = projectDirFromRequest(req, res);
+    if (!projectDir) return;
+
+    const relativePath =
+      typeof req.query.path === "string" ? req.query.path : "";
+    const absolutePath = ensureProjectPath(projectDir, relativePath);
+
+    if (!absolutePath || !/\.html?$/i.test(absolutePath)) {
+      res
+        .status(400)
+        .json({ error: "HTML file path must end with .html or .htm" });
+      return;
+    }
+
+    if (!fs.existsSync(absolutePath)) {
+      res.status(404).json({ error: "HTML file not found" });
+      return;
+    }
+
+    res.json(htmlPageFromFile(relativePath, absolutePath));
+  });
+
+  app.put("/api/html-file", (req, res) => {
+    const projectDir = projectDirFromRequest(req, res);
+    if (!projectDir) return;
+
+    const relativePath =
+      typeof req.query.path === "string" ? req.query.path : "";
+    const absolutePath = ensureProjectPath(projectDir, relativePath);
+
+    if (!absolutePath || !/\.html?$/i.test(absolutePath)) {
+      res
+        .status(400)
+        .json({ error: "HTML file path must end with .html or .htm" });
+      return;
+    }
+
+    if (!fs.existsSync(absolutePath)) {
+      res.status(404).json({ error: "HTML file not found" });
+      return;
+    }
+
+    const body = (req.body ?? {}) as {
+      content?: unknown;
+      document?: unknown;
+      expectedVersion?: unknown;
+    };
+
+    const hasContent = typeof body.content === "string";
+    const hasDocument =
+      body.document !== null &&
+      typeof body.document === "object" &&
+      (body.document as { format?: unknown }).format === "annotated-html" &&
+      typeof (body.document as { source?: unknown }).source === "string";
+
+    if (!hasContent && !hasDocument) {
+      res.status(400).json({
+        error: "content or document is required",
+      });
+      return;
+    }
+
+    const expectedVersion =
+      typeof body.expectedVersion === "string" ? body.expectedVersion : null;
+    const currentVersion = fileVersionFromFile(absolutePath);
+
+    if (expectedVersion && expectedVersion !== currentVersion) {
+      res.status(409).json({
+        error: "HTML file changed on disk",
+        current: htmlPageFromFile(relativePath, absolutePath),
+      });
+      return;
+    }
+
+    const incoming = hasContent
+      ? (body.content as string)
+      : serializeAnnotatedHtml(body.document as AnnotatedHtmlDoc);
+    const sanitized = sanitizeAnnotatedHtml(incoming);
+    fs.writeFileSync(absolutePath, sanitized.html);
+
+    const reread = htmlPageFromFile(relativePath, absolutePath);
+    res.json({ ...reread, sanitizerWarnings: sanitized.warnings });
   });
 
   app.get("/api/markdown-file/events", (req, res) => {

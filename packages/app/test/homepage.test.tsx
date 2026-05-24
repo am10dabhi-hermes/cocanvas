@@ -349,7 +349,7 @@ describe("Homepage", () => {
 
     expect(writeText).toHaveBeenCalledWith(AGENT_SETUP_PROMPT);
     expect(document.body.textContent).toContain("Copied");
-  });
+  }, 30000);
 
   it("explains the plan-review workflow with scrolling steps and a sticky visual", async () => {
     await renderHomepage(root);

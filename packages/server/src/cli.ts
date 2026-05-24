@@ -562,6 +562,8 @@ function isKnownCommand(value: string): value is KnownCommand {
 function isPathLikeInput(value: string): boolean {
   return (
     value.toLowerCase().endsWith(".md") ||
+    value.toLowerCase().endsWith(".html") ||
+    value.toLowerCase().endsWith(".htm") ||
     value.startsWith(".") ||
     value.startsWith("/") ||
     value.startsWith("~") ||
@@ -765,7 +767,9 @@ function printHelp(log: (message: string) => void) {
   log("  roughdraft <path>");
   log("");
   log("Commands:");
-  log("  open <path>        Open a Markdown file and wait for Done Reviewing");
+  log(
+    "  open <path>        Open a Markdown or HTML file and wait for Done Reviewing",
+  );
   log("  start              Start or reuse the background server");
   log("  status             Show server status");
   log("  stop               Stop the managed background server");
@@ -806,7 +810,7 @@ function printCommandHelp(
     );
     log("");
     log(
-      "Opens one Markdown file and waits for Done Reviewing. Starts Roughdraft if needed.",
+      "Opens one Markdown or HTML file and waits for Done Reviewing. Starts Roughdraft if needed.",
     );
     log("");
     log("Flags:");
@@ -1336,17 +1340,23 @@ async function sendOpenRequestToExistingWindow(
 
 function resolveTargetPath(inputPath: string): ResolvedTargetPath {
   const resolvedPath = path.resolve(inputPath);
-  const looksLikeMarkdownFile = resolvedPath.toLowerCase().endsWith(".md");
+  const extension = path.extname(resolvedPath).toLowerCase();
+  const looksLikeSupportedFile =
+    extension === ".md" || extension === ".html" || extension === ".htm";
 
   try {
     const stat = fs.statSync(resolvedPath);
     if (stat.isDirectory()) {
-      throw new Error(`Roughdraft can only open .md files: ${resolvedPath}`);
+      throw new Error(
+        `Roughdraft can only open .md, .html, or .htm files: ${resolvedPath}`,
+      );
     }
 
     if (stat.isFile()) {
-      if (!looksLikeMarkdownFile) {
-        throw new Error(`Roughdraft can only open .md files: ${resolvedPath}`);
+      if (!looksLikeSupportedFile) {
+        throw new Error(
+          `Roughdraft can only open .md, .html, or .htm files: ${resolvedPath}`,
+        );
       }
 
       return {

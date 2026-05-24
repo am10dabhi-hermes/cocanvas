@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Mixed review document</title>
+    <style>
+      mark[data-rd-comment-ids] { background: #fff3a3; }
+      aside.rd-review[hidden] { display: none; }
+      ins[data-rd-suggestion-id] { background: #d6f5d6; text-decoration: none; }
+      del[data-rd-suggestion-id] { background: #f9d5d5; }
+    </style>
+  </head>
+  <body>
+    <article>
+      <h1>Quarterly review</h1>
+
+      <p>
+        Revenue grew
+        <mark data-rd-comment-ids="c-rev-1">
+          <ins
+            data-rd-suggestion-id="s-rev-1"
+            data-rd-author="ananth@cradlewise.com"
+            data-rd-created-at="2026-05-23T12:00:00Z"
+          >12%</ins></mark>
+        quarter over quarter.
+      </p>
+
+      <p>
+        Churn was
+        <del
+          data-rd-suggestion-id="s-churn-1"
+          data-rd-author="reviewer@example.com"
+          data-rd-created-at="2026-05-23T12:01:00Z"
+        >high</del><ins
+          data-rd-suggestion-id="s-churn-1"
+          data-rd-author="reviewer@example.com"
+          data-rd-created-at="2026-05-23T12:01:00Z"
+        >elevated but stable</ins>
+        in the SMB segment.
+      </p>
+
+      <p>
+        We expanded the team in
+        <mark data-rd-comment-ids="c-team-1 c-team-2">Berlin and Bangalore</mark>.
+      </p>
+
+      <h2>Risks</h2>
+      <ul>
+        <li>
+          <mark data-rd-comment-ids="c-risk-1">Latency in the EU region.</mark>
+        </li>
+        <li>Long onboarding for enterprise customers.</li>
+      </ul>
+    </article>
+
+    <aside class="rd-review" hidden>
+      <rd-comment
+        id="c-rev-1"
+        data-rd-author="reviewer@example.com"
+        data-rd-created-at="2026-05-23T12:00:30Z"
+        data-rd-anchor-ids="c-rev-1"
+        data-rd-status="open"
+      >Cite the exact source row.</rd-comment>
+
+      <rd-comment
+        id="c-team-1"
+        data-rd-author="ananth@cradlewise.com"
+        data-rd-created-at="2026-05-23T12:02:00Z"
+        data-rd-anchor-ids="c-team-1"
+        data-rd-status="open"
+      >Mention headcount delta.</rd-comment>
+
+      <rd-comment
+        id="c-team-2"
+        data-rd-author="reviewer@example.com"
+        data-rd-created-at="2026-05-23T12:02:45Z"
+        data-rd-anchor-ids="c-team-1"
+        data-rd-status="open"
+        data-rd-reply-to="c-team-1"
+      >+1, and split by office.</rd-comment>
+
+      <rd-comment
+        id="c-risk-1"
+        data-rd-author="ananth@cradlewise.com"
+        data-rd-created-at="2026-05-23T12:03:30Z"
+        data-rd-anchor-ids="c-risk-1"
+        data-rd-status="resolved"
+      >Fixed in last release.</rd-comment>
+    </aside>
+  </body>
+</html>

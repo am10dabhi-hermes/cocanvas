@@ -23,6 +23,7 @@ describe("app navigation", () => {
       rawPath: "/Users/me/.claude/plans/example.md",
       projectPath: "/Users/me/.claude/plans",
       documentPath: "example.md",
+      documentKind: "markdown",
     });
   });
 
@@ -44,6 +45,7 @@ describe("app navigation", () => {
       rawPath: null,
       projectPath: null,
       documentPath: null,
+      documentKind: null,
     });
 
     window.history.replaceState(null, "", PREVIEW_PATH);
@@ -52,6 +54,37 @@ describe("app navigation", () => {
       rawPath: null,
       projectPath: null,
       documentPath: null,
+      documentKind: null,
+    });
+  });
+
+  it("recognizes .html paths", () => {
+    window.history.replaceState(
+      null,
+      "",
+      "/?path=%2FUsers%2Fme%2Fdocs%2Freport.html",
+    );
+
+    expect(getRequestedPathState()).toEqual({
+      rawPath: "/Users/me/docs/report.html",
+      projectPath: "/Users/me/docs",
+      documentPath: "report.html",
+      documentKind: "html",
+    });
+  });
+
+  it("recognizes .htm paths", () => {
+    window.history.replaceState(
+      null,
+      "",
+      "/?path=%2FUsers%2Fme%2Fdocs%2Flegacy.htm",
+    );
+
+    expect(getRequestedPathState()).toEqual({
+      rawPath: "/Users/me/docs/legacy.htm",
+      projectPath: "/Users/me/docs",
+      documentPath: "legacy.htm",
+      documentKind: "html",
     });
   });
 

@@ -66,6 +66,14 @@ Paragraph with **bold**, [link](https://example.com), `inline code`.
 ```markdown
 # Fenced examples This page should not show a review rail just because examples appear inside code fences. ```text {==example==}{>>comment<<}{id="c1" by="user" at="2026-05-12T22:52:50.592Z"} {++inserted++} {--deleted--} {~~old~>new~~} ```
 ```
+
+### Annotated HTML Document
+
+The canonical HTML fixtures live in `.context/fixtures/html/`. Use
+`mixed-review-document.html` for any HTML review-rail screenshots; it
+exercises a multi-id anchor, a substitution suggestion, a reply thread, and
+a resolved comment in one file. See
+`docs/adr/0005-html-review-annotation-contract.md` for the full schema.
 ## Capture Matrix
 | Area | State | How to reach it | Useful selectors | Notes |
 | --- | --- | --- | --- | --- |
@@ -115,6 +123,9 @@ Paragraph with **bold**, [link](https://example.com), `inline code`.
 | Comment editor | Reply editing | Use a reply action | `comment-rail-child-editor` | Useful for nested thread spacing. |
 | Code mode | Review rail present | Open review fixture with `?editor=code` | `page-card-code`, `markdown-code-editor` | Confirms code editor and rail can coexist. |
 | Code mode | Review rail absent | Open fenced fixture with `?editor=code` | `page-card-code`, `markdown-code-editor` | Confirms fenced CriticMarkup alone does not create review rail. |
+| HTML document | Read-only render | Open URL with `?path=<absolute>/mixed-review-document.html` | `comment-anchor`, `html-review-rail` | Confirms marks render and rail lists comments + suggestions in document order. |
+| HTML document | Add comment composer | Select inline text in the HTML doc and choose `Add comment` | `html-add-comment-composer` | Captures the composer over the selected anchor span. |
+| HTML document | Accept/Reject suggestion | Open a fixture with a substitution; use rail actions | `html-suggestion-action-accept`, `html-suggestion-action-reject` | Verify the on-disk file is updated after each action. |
 | Error/home fallback | Non-Markdown path | Open URL with `?path=/tmp/file.txt` | homepage error message | Copy: `Roughdraft now opens one .md file at a time.` |
 | Error/home fallback | Missing/unloadable path | Open URL with invalid markdown path through local backend | homepage error message | Captures load-error homepage variant. |
 ## Playwright Capture Skeleton

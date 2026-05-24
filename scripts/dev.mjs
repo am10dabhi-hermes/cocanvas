@@ -31,7 +31,7 @@ console.log(`Using app port ${appPort}.`);
 console.log(`Using API port ${apiPort}.`);
 console.log(`Open Roughdraft in dev at http://localhost:${appPort}`);
 console.log(
-  `Open files directly with http://localhost:${appPort}/?path=/absolute/path/to/file.md`,
+  `Open files directly with http://localhost:${appPort}/?path=/absolute/path/to/file.md or .html`,
 );
 console.log(
   `API port ${apiPort} is internal; don't use it as the browser URL.`,

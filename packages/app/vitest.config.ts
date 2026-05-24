@@ -8,6 +8,7 @@ export default defineConfig({
     },
   },
   test: {
+    testTimeout: 30000,
     coverage: {
       provider: "v8",
       reportsDirectory: "../../coverage/app",

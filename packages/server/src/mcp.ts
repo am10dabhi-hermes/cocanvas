@@ -1,10 +1,16 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
+  acceptHtmlSuggestion,
+  addHtmlComment,
   appendRoughdraftReply,
   extractRoughdraftReviewIndex,
   markRoughdraftResolved,
+  parseAnnotatedHtml,
+  rejectHtmlSuggestion,
+  sanitizeAnnotatedHtml,
 } from "@roughdraft/rfm";
 
 interface JsonRpcRequest {
@@ -95,6 +101,78 @@ const tools: ToolDefinition[] = [
         parentId: { type: "string" },
         message: { type: "string" },
         author: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "roughdraft_read_html_document",
+    description:
+      "Read a local annotated HTML (.html / .htm) file from disk, sanitize it, and return the parsed AnnotatedHtmlDoc model plus a content checksum. Pass projectRoot to constrain the documentPath to a directory.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["documentPath"],
+      properties: {
+        documentPath: { type: "string" },
+        projectRoot: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "roughdraft_add_comment",
+    description:
+      "Add a comment to a local annotated HTML file by selecting an anchor text span. The span is identified by anchorText plus an optional 1-based occurrence; set requireUnique to refuse when the anchor matches multiple occurrences.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "documentPath",
+        "id",
+        "anchorText",
+        "author",
+        "createdAt",
+        "body",
+      ],
+      properties: {
+        documentPath: { type: "string" },
+        projectRoot: { type: "string" },
+        id: { type: "string" },
+        anchorText: { type: "string" },
+        occurrence: { type: "number" },
+        requireUnique: { type: "boolean" },
+        author: { type: "string" },
+        createdAt: { type: "string" },
+        body: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "roughdraft_accept_suggestion",
+    description:
+      "Accept a suggestion in a local annotated HTML file by id. Substitutions become their ins content; insertions are kept; deletions are removed.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["documentPath", "id"],
+      properties: {
+        documentPath: { type: "string" },
+        projectRoot: { type: "string" },
+        id: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "roughdraft_reject_suggestion",
+    description:
+      "Reject a suggestion in a local annotated HTML file by id. Substitutions restore their del content; insertions are removed; deletions are kept.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["documentPath", "id"],
+      properties: {
+        documentPath: { type: "string" },
+        projectRoot: { type: "string" },
+        id: { type: "string" },
       },
     },
   },
@@ -318,6 +396,133 @@ export async function callTool(
     return { ok: true, documentPath };
   }
 
+  if (name === "roughdraft_read_html_document") {
+    const documentPath = requireHtmlPath(args);
+    const raw = fs.readFileSync(documentPath, "utf8");
+    const sanitized = sanitizeAnnotatedHtml(raw);
+    const document = parseAnnotatedHtml(sanitized.html);
+    return {
+      documentPath,
+      document,
+      checksum: contentChecksum(sanitized.html),
+      sanitizerWarnings: sanitized.warnings,
+    };
+  }
+
+  if (name === "roughdraft_add_comment") {
+    const documentPath = requireHtmlPath(args);
+    const id = requireString(args, "id");
+    const anchorText = requireString(args, "anchorText");
+    const author = requireString(args, "author");
+    const createdAt = requireString(args, "createdAt");
+    const body = requireString(args, "body");
+    const occurrence =
+      typeof args.occurrence === "number" ? args.occurrence : undefined;
+    const requireUnique =
+      typeof args.requireUnique === "boolean" ? args.requireUnique : false;
+
+    const raw = fs.readFileSync(documentPath, "utf8");
+    const sanitized = sanitizeAnnotatedHtml(raw);
+    const baseDoc = parseAnnotatedHtml(sanitized.html);
+
+    if (requireUnique && occurrence === undefined) {
+      const matches = countPlainTextOccurrences(sanitized.html, anchorText);
+      if (matches > 1) {
+        throw new Error(
+          `add_comment: anchorText "${anchorText}" is ambiguous (matched ${matches} occurrences); pass occurrence to disambiguate`,
+        );
+      }
+      if (matches === 0) {
+        throw new Error(
+          `add_comment: anchorText "${anchorText}" not found in document`,
+        );
+      }
+    }
+
+    const updated = addHtmlComment(baseDoc, {
+      id,
+      anchor: { text: anchorText, occurrence },
+      author,
+      createdAt,
+      body,
+    });
+
+    const reSanitized = sanitizeAnnotatedHtml(updated.source);
+    fs.writeFileSync(documentPath, reSanitized.html);
+    const finalDoc = parseAnnotatedHtml(reSanitized.html);
+    return {
+      documentPath,
+      commentId: id,
+      checksum: contentChecksum(reSanitized.html),
+      sanitizerWarnings: reSanitized.warnings,
+      summary: {
+        comments: finalDoc.comments.length,
+        suggestions: finalDoc.suggestions.length,
+      },
+      warnings: finalDoc.warnings,
+    };
+  }
+
+  if (name === "roughdraft_accept_suggestion") {
+    const documentPath = requireHtmlPath(args);
+    const id = requireString(args, "id");
+    const raw = fs.readFileSync(documentPath, "utf8");
+    const sanitized = sanitizeAnnotatedHtml(raw);
+    const baseDoc = parseAnnotatedHtml(sanitized.html);
+    let updated: ReturnType<typeof acceptHtmlSuggestion>;
+    try {
+      updated = acceptHtmlSuggestion(baseDoc, { id });
+    } catch {
+      throw new Error(
+        `accept_suggestion: suggestion id "${id}" not found in ${documentPath}`,
+      );
+    }
+    const reSanitized = sanitizeAnnotatedHtml(updated.source);
+    fs.writeFileSync(documentPath, reSanitized.html);
+    const finalDoc = parseAnnotatedHtml(reSanitized.html);
+    return {
+      documentPath,
+      suggestionId: id,
+      action: "accepted",
+      checksum: contentChecksum(reSanitized.html),
+      sanitizerWarnings: reSanitized.warnings,
+      summary: {
+        comments: finalDoc.comments.length,
+        suggestions: finalDoc.suggestions.length,
+      },
+    };
+  }
+
+  if (name === "roughdraft_reject_suggestion") {
+    const documentPath = requireHtmlPath(args);
+    const id = requireString(args, "id");
+    const raw = fs.readFileSync(documentPath, "utf8");
+    const sanitized = sanitizeAnnotatedHtml(raw);
+    const baseDoc = parseAnnotatedHtml(sanitized.html);
+    let updated: ReturnType<typeof rejectHtmlSuggestion>;
+    try {
+      updated = rejectHtmlSuggestion(baseDoc, { id });
+    } catch {
+      throw new Error(
+        `reject_suggestion: suggestion id "${id}" not found in ${documentPath}`,
+      );
+    }
+    const reSanitized = sanitizeAnnotatedHtml(updated.source);
+    fs.writeFileSync(documentPath, reSanitized.html);
+    const finalDoc = parseAnnotatedHtml(reSanitized.html);
+    return {
+      documentPath,
+      suggestionId: id,
+      action: "rejected",
+      checksum: contentChecksum(reSanitized.html),
+      sanitizerWarnings: reSanitized.warnings,
+      summary: {
+        comments: finalDoc.comments.length,
+        suggestions: finalDoc.suggestions.length,
+      },
+    };
+  }
+
   if (name === "roughdraft_mark_resolved") {
     const documentPath = requireDocumentPath(args);
     const targetId = requireString(args, "targetId");
@@ -355,6 +560,67 @@ function requireDocumentPath(args: Record<string, unknown>): string {
     throw new Error(`Markdown file not found: ${absolutePath}`);
   }
   return absolutePath;
+}
+
+function requireHtmlPath(args: Record<string, unknown>): string {
+  const documentPath = requireString(args, "documentPath");
+  const projectRoot =
+    typeof args.projectRoot === "string" && args.projectRoot.trim().length > 0
+      ? path.resolve(args.projectRoot)
+      : null;
+  const absolutePath = projectRoot
+    ? path.resolve(projectRoot, documentPath)
+    : path.resolve(documentPath);
+
+  if (projectRoot) {
+    const rel = path.relative(projectRoot, absolutePath);
+    if (rel.startsWith("..") || path.isAbsolute(rel)) {
+      throw new Error(
+        `Document path is outside the configured projectRoot: ${absolutePath}`,
+      );
+    }
+  }
+
+  if (!/\.html?$/i.test(absolutePath)) {
+    throw new Error(
+      `Roughdraft can only read .html or .htm files: ${absolutePath}`,
+    );
+  }
+  if (!fs.existsSync(absolutePath) || !fs.statSync(absolutePath).isFile()) {
+    throw new Error(`HTML file not found: ${absolutePath}`);
+  }
+  return absolutePath;
+}
+
+function contentChecksum(content: string): string {
+  return `sha256:${crypto.createHash("sha256").update(content, "utf8").digest("hex")}`;
+}
+
+function countPlainTextOccurrences(source: string, target: string): number {
+  if (target.length === 0) return 0;
+  let count = 0;
+  let cursor = 0;
+  let inTag = false;
+  while (cursor < source.length) {
+    const ch = source[cursor];
+    if (inTag) {
+      if (ch === ">") inTag = false;
+      cursor += 1;
+      continue;
+    }
+    if (ch === "<") {
+      inTag = true;
+      cursor += 1;
+      continue;
+    }
+    if (source.startsWith(target, cursor)) {
+      count += 1;
+      cursor += target.length;
+      continue;
+    }
+    cursor += 1;
+  }
+  return count;
 }
 
 function requireString(args: Record<string, unknown>, key: string): string {

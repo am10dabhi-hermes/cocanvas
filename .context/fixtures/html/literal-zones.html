@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Literal zones</title>
+    <style>
+      /* Author CSS must not be parsed as Roughdraft markup, even though it
+         mentions data-rd-comment-ids and rd-comment selectors below. */
+      mark[data-rd-comment-ids] { background: #fff3a3; }
+      rd-comment { display: none; }
+    </style>
+    <script>
+      // Author script must not be parsed as Roughdraft markup, even though
+      // the literal text below mentions <mark data-rd-comment-ids> and
+      // <rd-comment> tokens.
+      const example = "<mark data-rd-comment-ids=\"c-not-real\">x</mark>";
+      console.log(example);
+    </script>
+  </head>
+  <body>
+    <article>
+      <h1>HTML annotation examples</h1>
+
+      <p>
+        A real annotation lives in the body:
+        <mark data-rd-comment-ids="c-real-1">like this</mark>.
+      </p>
+
+      <h2>Code samples are literal</h2>
+
+      <p>The following <code>&lt;mark data-rd-comment-ids="c-code-1"&gt;literal&lt;/mark&gt;</code> must not become an anchor.</p>
+
+      <pre><code>&lt;mark data-rd-comment-ids="c-pre-1"&gt;example in pre&lt;/mark&gt;
+&lt;rd-comment id="c-pre-1"&gt;not a real comment&lt;/rd-comment&gt;
+&lt;ins data-rd-suggestion-id="s-pre-1"&gt;literal ins&lt;/ins&gt;
+</code></pre>
+
+      <h2>Explicit literal escape hatch</h2>
+
+      <div data-rd-literal>
+        Anything inside here is literal:
+        &lt;mark data-rd-comment-ids="c-literal-1"&gt;not parsed&lt;/mark&gt;
+        &lt;rd-comment id="c-literal-1"&gt;ignored&lt;/rd-comment&gt;
+      </div>
+    </article>
+
+    <aside class="rd-review" hidden>
+      <rd-comment
+        id="c-real-1"
+        data-rd-author="ananth@cradlewise.com"
+        data-rd-created-at="2026-05-23T13:00:00Z"
+        data-rd-anchor-ids="c-real-1"
+        data-rd-status="open"
+      >This is the only real comment in the file.</rd-comment>
+    </aside>
+  </body>
+</html>

@@ -403,6 +403,39 @@ describe("cli", () => {
     expect(test.getLastOpenedUrl()).toBeNull();
   });
 
+  it("opens local HTML files from the CLI", async () => {
+    const test = createTestDependencies();
+    const documentPath = path.join(projectDir, "draft.html");
+    fs.writeFileSync(
+      documentPath,
+      "<!doctype html><html><body>Draft</body></html>",
+    );
+
+    const exitCode = await runCli(
+      ["open", documentPath, "--no-watch", "--json"],
+      test.deps,
+    );
+    const persisted = JSON.parse(
+      fs.readFileSync(getServerStateFilePath(test.deps.env), "utf8"),
+    ) as { port: number };
+    const payload = parseOnlyJsonLog<{
+      opened: boolean;
+      url: string;
+      serverUrl: string;
+      path: string;
+      openMode: string;
+    }>(test.logs);
+
+    expect(exitCode).toBe(0);
+    expect(payload).toEqual({
+      opened: true,
+      url: expectedOpenUrl(`http://localhost:${persisted.port}`, documentPath),
+      serverUrl: `http://localhost:${persisted.port}`,
+      path: documentPath,
+      openMode: "disabled",
+    });
+  });
+
   it("emits JSON from open --no-watch --json without scraping human prose", async () => {
     const test = createTestDependencies();
     const documentPath = path.join(projectDir, "draft.md");
@@ -1045,7 +1078,7 @@ describe("cli", () => {
     expect(exitCode).toBe(1);
     expect(test.getSpawnCount()).toBe(0);
     expect(test.errors).toContain(
-      `Roughdraft can only open .md files: ${projectDir}`,
+      `Roughdraft can only open .md, .html, or .htm files: ${projectDir}`,
     );
     expect(test.getLastOpenedUrl()).toBeNull();
   });
@@ -1623,7 +1656,7 @@ describe("runCli open in remote mode", () => {
     expect(errors.join("\n")).toContain("Could not register remote session");
   });
 
-  it("rejects non-.md targets in remote mode without contacting the host", async () => {
+  it("rejects unsupported targets in remote mode without contacting the host", async () => {
     const filePath = path.join(projectDir, "notes.txt");
     fs.writeFileSync(filePath, "hello");
 
@@ -1651,7 +1684,9 @@ describe("runCli open in remote mode", () => {
 
     expect(exitCode).toBe(1);
     expect(fetchCalls).toBe(0);
-    expect(errors.join("\n")).toContain("can only open .md files");
+    expect(errors.join("\n")).toContain(
+      "can only open .md, .html, or .htm files",
+    );
   });
 
   it("registers a session, opens the viewer URL, and writes save events to disk", {

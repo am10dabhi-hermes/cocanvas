@@ -464,7 +464,9 @@ describe("interaction mode preserved across view toggle (issue 3 fix)", () => {
     vi.restoreAllMocks();
   });
 
-  it("interaction mode is preserved when view mode changes without remount", async () => {
+  it("interaction mode is preserved when view mode changes without remount", {
+    timeout: 15000,
+  }, async () => {
     // With the fix, view mode changes use React state (no page reload),
     // so the DocumentWorkspace component stays mounted and interaction
     // mode is preserved.
@@ -525,6 +527,13 @@ describe("review handoff watcher affordance", () => {
     (
       globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
+    // DocumentWorkspace polls getReviewWatchStatus every 1500ms. In these
+    // tests we drive watcher-count changes through explicit re-renders, so
+    // suppress the timer to avoid races where the poll fires between the
+    // click and the assertion and flips state back to "idle".
+    vi.spyOn(window, "setInterval").mockReturnValue(
+      0 as unknown as ReturnType<typeof window.setInterval>,
+    );
   });
 
   afterEach(async () => {

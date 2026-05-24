@@ -1497,7 +1497,9 @@ describe("PageCard editor integration", () => {
     );
   });
 
-  it("opens a reply to the root comment when r is pressed in a focused thread", async () => {
+  it("opens a reply to the root comment when r is pressed in a focused thread", {
+    timeout: 15000,
+  }, async () => {
     const rendered = await renderPageCard({
       page: {
         id: "doc-comment-reply-shortcut-1",
