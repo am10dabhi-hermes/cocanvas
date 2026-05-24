@@ -1,120 +1,171 @@
-# Roughdraft
-A local-first markdown editor and viewer for working with AI.
+# CoCanvas
 
-{==Open one markdown file on your machine. Review it, comment on it, and suggest edits.==}{>>What does this mean?<<}{id="c3" by="user" at="2026-04-30T20:18:51.163Z"}{>>It means Roughdraft works with a normal local Markdown file: you open one .md file from your computer, read it in the app, leave inline comments, and propose edits that are saved back into the Markdown using CriticMarkup.<<}{id="c4" by="AI" at="2026-04-30T20:19:39.000Z" re="c3"}{>>cjool<<}{id="c5" by="user" at="2026-05-07T20:38:25.621Z" re="c4"}
+A local-first collaborative canvas between you and your AI agent for reviewing
+and editing Markdown and HTML documents on your machine.
 
-Paste this into your coding agent:
+> CoCanvas is inspired by — and derived from — [Roughdraft](https://github.com/Lex-Inc/roughdraft)
+> by Nathan Baschez. It keeps Roughdraft's CriticMarkup-based Markdown review
+> workflow and extends it with experimental HTML review support
+> (inline comments, suggestions, and round-trip persistence as annotations in
+> the HTML file itself). See [NOTICE](./NOTICE) for full attribution and
+> [LICENSE](./LICENSE) for the MIT license that covers both upstream and new
+> work.
 
-```text
-Install Roughdraft for me using `npm i -g roughdraft`, then read https://roughdraft.md/setup.md and set yourself up to use it.
+## What is CoCanvas?
+
+CoCanvas opens a single Markdown or HTML file on your machine and lets you:
+
+- Read it in a clean local editor at `http://localhost:7373`.
+- Leave inline comments and suggested changes.
+- Hand the document back to an AI agent so it can read your feedback and
+  respond — all without leaving the file on disk.
+
+Everything stays as a normal `.md` or `.html` file you can also edit in VS Code,
+Vim, Cursor, or anywhere else. No cloud, no account, no telemetry.
+
+### Markdown review
+
+Comments and suggested edits are stored in the Markdown file itself using
+[CriticMarkup](https://criticmarkup.com), extended with compact attribute
+blocks (`{id="…" by="…" at="…" re="…"}`) so review threads round-trip cleanly:
+
+```markdown
+Please revisit {==this sentence==}{>>Needs a source<<}{id="c1" by="user" at="2026-04-28T12:00:00.000Z"}.
 ```
 
-Or install and open a file yourself:
+The canonical Roughdraft Flavored Markdown spec — which CoCanvas inherits — is
+published at
+[roughdraft.md/spec/roughdraft-flavored-markdown.md](https://roughdraft.md/spec/roughdraft-flavored-markdown.md).
+
+### HTML review (MVP)
+
+CoCanvas opens annotated HTML documents directly:
 
 ```bash
-npm i -g roughdraft
-roughdraft open /absolute/path/to/file.md
-```
-## What is this?
-Roughdraft is a local-first markdown editor and viewer that runs on your computer.
-
-Its job is to make markdown files easy to open, read, edit, review, and discuss with your AI agent without moving them into a proprietary format or a hosted app.
-
-Roughdraft opens a single markdown file directly for CriticMarkup comments and suggested changes.
-## How it works
-- **Local-first markdown editor** — Open normal `.md` files from your machine and edit them directly
-  
-- **Works with your AI agent** — Tell your local agent to open a file in Roughdraft on your computer, then keep collaborating from there
-  
-- **Comments & suggested changes** — Use CriticMarkup for inline feedback, revisions, and review conversations
-  
-- **Markdown files on disk** — Everything stays as regular markdown files you can also edit in VS Code, Vim, Cursor, or anywhere else
-  
-- **No cloud, no account, no telemetry** — Runs entirely on your machine
-  
-## Quick start
-Install Roughdraft and start the local server:
-
-```bash
-npm i -g roughdraft
-roughdraft start
+cocanvas open ./path/to/page.html
 ```
 
-`roughdraft start` runs Roughdraft in the background, reuses or chooses a free localhost port, writes server state to `~/.roughdraft/server.json`, prints the active URL, and exits while the server keeps running.
+HTML review uses the annotation contract recorded in
+[`docs/adr/0005-html-review-annotation-contract.md`](./docs/adr/0005-html-review-annotation-contract.md):
 
-Open a specific markdown file:
+- Comment anchors are a single `<mark data-rd-comment-ids="…">…</mark>` with one
+  or more space-separated ids.
+- Comment records live in an `<aside class="rd-review" hidden>` at the end of
+  `<body>` as `<rd-comment id="…">…</rd-comment>` elements.
+- Suggestions are `<ins>` / `<del>` (or both with a shared
+  `data-rd-suggestion-id`) for insertion, deletion, and substitution.
+- Protected zones — `<script>`, `<style>`, `<pre>`, `<code>`, and
+  `data-rd-literal` — are never rewritten.
+
+MCP tools that operate on annotated HTML files: `roughdraft_read_html_document`,
+`roughdraft_add_comment`, `roughdraft_accept_suggestion`,
+`roughdraft_reject_suggestion`. (Tool names keep the `roughdraft_` prefix for
+agent-compatibility.) A captured end-to-end transcript lives at
+`.context/mcp-evidence/G6.4-agent-flow.transcript.md`.
+
+## Install and run
+
+The CLI is published (or will be published) as `cocanvas`. A `roughdraft`
+alias is also installed for compatibility with existing agent prompts.
 
 ```bash
-roughdraft open ./path/to/my-essay/draft.md
+npm i -g cocanvas
+cocanvas start
+```
+
+`cocanvas start` runs the server in the background, reuses or chooses a free
+localhost port, writes server state to `~/.roughdraft/server.json`, prints the
+active URL, and exits while the server keeps running. (The on-disk state
+directory keeps the `.roughdraft` name to remain compatible with the upstream
+state format.)
+
+Open a specific file:
+
+```bash
+cocanvas open ./path/to/draft.md
+cocanvas open ./path/to/page.html
 ```
 
 For scripts and agents that need a URL without launching a browser:
 
 ```bash
-roughdraft open ./path/to/my-essay/draft.md --print-url
-roughdraft status --json
+cocanvas open ./path/to/draft.md --print-url
+cocanvas status --json
 ```
 
 Check or stop the background server:
 
 ```bash
-roughdraft status
-roughdraft stop
+cocanvas status
+cocanvas stop
 ```
 
-`roughdraft open` will reuse the running server and auto-start it if needed. You can also use `roughdraft ./path/to/file.md` as a shortcut when the input clearly looks like a path.
+`cocanvas open` reuses the running server and auto-starts it if needed. You can
+also use `cocanvas ./path/to/file.md` as a shortcut when the input clearly
+looks like a path.
 
-Roughdraft does not edit `~/CLAUDE.md`, `~/AGENTS.md`, or other user-level agent files. The setup prompt asks your agent to update its own guidance.
-
-If the local server is already running, you can also open a file directly by URL:
+If the local server is already running, you can also open a file directly by
+URL:
 
 ```text
-http://localhost:7373/?path=/absolute/path/to/my-essay/draft.md
+http://localhost:7373/?path=/absolute/path/to/draft.md
 ```
 
 That makes an agent-friendly workflow possible:
 
-1. Your AI writes or updates markdown files on disk.
-  
-2. You tell it to open a markdown file in Roughdraft.
-  
-3. Roughdraft opens locally on your machine.
-  
+1. Your AI writes or updates a Markdown or HTML file on disk.
+2. You tell it to open the file in CoCanvas.
+3. CoCanvas opens locally on your machine.
 4. You read, edit, leave comments, and suggest changes.
-  
-5. You click **Done Reviewing** in Roughdraft, and the AI can respond to your comments or revise the document.
-  
+5. You click **Done Reviewing**, and the agent picks up where you left off.
 
 Agents can watch that handoff directly:
 
 ```bash
-roughdraft open ./path/to/my-essay/draft.md --json
+cocanvas open ./path/to/draft.md --json
 ```
 
-`roughdraft open` starts or reuses the local server, opens the document, registers a fresh watcher, blocks until the next `review.completed` event, then prints event JSON with the document path, file version, and feedback counts. By default there is no watch timeout; pass `--timeout <seconds>` when you want one. Use `--no-watch` when you only want to open the document and return immediately. If no watcher is active when you click **Done Reviewing**, Roughdraft shows a fallback prompt you can copy into the agent.
+`cocanvas open` starts or reuses the local server, opens the document,
+registers a fresh watcher, blocks until the next `review.completed` event,
+then prints event JSON with the document path, file version, and feedback
+counts. Pass `--timeout <seconds>` to bound the wait. Use `--no-watch` to
+return immediately.
 
 Experimental MCP clients can start the stdio server with:
 
 ```bash
-roughdraft mcp
+cocanvas mcp
 ```
 
-The MCP server exposes tools to read the review index, list pending feedback, watch review events, append replies, and mark items resolved. CriticMarkup in the Markdown file remains the durable source of truth.
+The MCP server exposes tools to read the review index, list pending feedback,
+watch review events, append replies, and mark items resolved. CriticMarkup
+(for Markdown) and the HTML annotation contract (for HTML) remain the durable
+sources of truth.
+
 ## Local development
+
 ```bash
 ./scripts/setup.sh
 ./scripts/run.sh
 ```
 
-`./scripts/setup.sh` installs workspace dependencies and builds the app and server. `./scripts/run.sh` serves the built app at `http://localhost:7373`.
+`./scripts/setup.sh` installs workspace dependencies and builds the app and
+server. `./scripts/run.sh` serves the built app at `http://localhost:7373`.
 
-The two scripts coordinate through a lock file, so it's safe to start `./scripts/run.sh` while `./scripts/setup.sh` is still in progress. `run` will wait for setup to finish, or trigger setup itself if nothing has been built yet.
+The two scripts coordinate through a lock file, so it's safe to start
+`./scripts/run.sh` while `./scripts/setup.sh` is still in progress. `run` will
+wait for setup to finish, or trigger setup itself if nothing has been built
+yet.
 
-If you prefer package scripts, the same commands are available as `pnpm setup` and `pnpm start`.
+If you prefer package scripts, the same commands are available as `pnpm setup`
+and `pnpm start`.
 
-Running `pnpm setup` also installs a per-worktree dev CLI wrapper into `~/.local/bin` by default, using the current worktree directory name. For example, this checkout might install `roughdraft-dev-lyon-v2`, which points at this worktree's local code while leaving the published global `roughdraft` command untouched.
-
-Each dev wrapper keeps its own server state under `~/.roughdraft/dev/<wrapper-name>` by default, so opening a file from one worktree will not accidentally reuse a backend started from another worktree. `roughdraft-dev-<worktree> open ...` can start its own background server as needed; you do not need to run `pnpm dev` first just to open files in Roughdraft.
+Running `pnpm setup` also installs a per-worktree dev CLI wrapper into
+`~/.local/bin` by default, using the current worktree directory name. For
+example, this checkout might install `roughdraft-dev-lyon-v2`, which points at
+this worktree's local code while leaving any globally installed CoCanvas
+binary untouched. The dev wrapper name keeps the `roughdraft-dev-` prefix to
+stay compatible with the per-worktree dev CLI documented in `AGENTS.md`.
 
 You can refresh that wrapper manually with:
 
@@ -132,84 +183,26 @@ pnpm check
 ```
 
 `pnpm check` is the same command the pull request workflow runs before merge.
-## Publishing
-Roughdraft publishes from `main` when the root `package.json` version is newer than the current npm `latest` version.
 
-Release flow:
-
-1. Bump the root `package.json` version in a pull request.
-  
-2. Merge the pull request to `main`.
-  
-3. The `Publish to npm` GitHub Actions workflow runs `pnpm check`, publishes the package if that exact version is not already on npm and is newer than `latest`, then creates a `v<version>` git tag.
-  
-
-The workflow uses npm trusted publishing, so npm must be configured with this trusted publisher:
-
-```text
-Owner: Lex-Inc
-Repository: roughdraft
-Workflow filename: publish.yml
-```
-
-No `NPM_TOKEN` secret is required.
-## Files on disk
-```
-my-essay/
-  draft-1.md            # A normal markdown file on disk
-  draft-2.md            # Another file you can open separately
-```
-
-Roughdraft reads and writes the markdown file directly.
-
-### HTML files (MVP)
-
-Roughdraft also opens annotated HTML documents directly:
-
-```bash
-roughdraft open ./path/to/page.html
-```
-
-HTML review uses the annotation contract recorded in
-`docs/adr/0005-html-review-annotation-contract.md`:
-
-- Comment anchors are a single `<mark data-rd-comment-ids="…">…</mark>` with one or more space-separated ids.
-- Comment records live in an `<aside class="rd-review" hidden>` at the end of `<body>` as `<rd-comment id="…">…</rd-comment>` elements.
-- Suggestions are `<ins>` / `<del>` (or both with a shared `data-rd-suggestion-id`) for insertion, deletion, and substitution.
-- Protected zones — `<script>`, `<style>`, `<pre>`, `<code>`, and `data-rd-literal` — are never rewritten.
-
-MCP tools that operate on annotated HTML files: `roughdraft_read_html_document`,
-`roughdraft_add_comment`, `roughdraft_accept_suggestion`, `roughdraft_reject_suggestion`.
-A captured end-to-end transcript lives at `.context/mcp-evidence/G6.4-agent-flow.transcript.md`.
-
-## Agent setup
-If you want your local agent to remember the Roughdraft workflow, ask it to read the live setup prompt:
-
-```text
-Install Roughdraft for me using `npm i -g roughdraft`, then read https://roughdraft.md/setup.md and set yourself up to use it.
-```
-
-Use `roughdraft help`, `roughdraft help agent`, or `roughdraft help criticmarkup` if you need a local refresher.
 ## CLI reference
+
 ```text
-roughdraft [flags] <command> [args]
-roughdraft <path>
+cocanvas [flags] <command> [args]
+cocanvas <path>
 ```
 
 Commands:
 
 ```text
-open <path>        Open one Markdown file and wait for Done Reviewing
+open <path>        Open one Markdown or HTML file and wait for Done Reviewing
 start              Start or reuse the background server
 status             Show server status
 stop               Stop the managed background server
 watch <path>       Wait for a Done Reviewing event
 mcp                Start the experimental stdio MCP server
-doctor [path]      Diagnose setup or validate Markdown
+doctor [path]      Diagnose setup or validate a document
 help agent         Print the agent setup prompt
 help criticmarkup  Show CriticMarkup examples
-agent-setup        Print the agent setup prompt
-criticmarkup       Show CriticMarkup examples
 ```
 
 Global flags:
@@ -224,38 +217,32 @@ Global flags:
 Useful command flags:
 
 ```text
-roughdraft open <path> --no-open
-roughdraft open <path> --print-url
-roughdraft open <path> --json
-roughdraft open <path> --no-watch
-roughdraft start --port <port>
-roughdraft status --json
-roughdraft stop --all
-roughdraft watch ./draft.md --json
-roughdraft doctor --json
-roughdraft doctor ./draft.md
-roughdraft doctor ./draft.md --json
+cocanvas open <path> --no-open
+cocanvas open <path> --print-url
+cocanvas open <path> --json
+cocanvas open <path> --no-watch
+cocanvas start --port <port>
+cocanvas status --json
+cocanvas stop --all
+cocanvas watch ./draft.md --json
+cocanvas doctor --json
+cocanvas doctor ./draft.md
 ```
 
-Usage errors return exit code `2`. Runtime failures return exit code `1`. `roughdraft status --json` returns exit code `0` even when the JSON says `"running": false`.
+Usage errors return exit code `2`. Runtime failures return exit code `1`.
+`cocanvas status --json` returns exit code `0` even when the JSON says
+`"running": false`.
 
-Supported environment variables:
+Supported environment variables (the `ROUGHDRAFT_*` names are kept for
+backward compatibility with existing scripts and agents):
 
 ```text
-ROUGHDRAFT_PORT
-  Preferred server port.
-
-PORT
-  Legacy preferred server port. Used only when ROUGHDRAFT_PORT is unset.
-
-ROUGHDRAFT_NO_OPEN=1
-  Disable browser/app opening.
-
-ROUGHDRAFT_STATE_FILE
-  Exact path to the server state JSON file.
-
-ROUGHDRAFT_STATE_DIR
-  Directory containing server.json.
+ROUGHDRAFT_PORT          Preferred server port.
+PORT                     Legacy preferred server port. Used only when
+                         ROUGHDRAFT_PORT is unset.
+ROUGHDRAFT_NO_OPEN=1     Disable browser/app opening.
+ROUGHDRAFT_STATE_FILE    Exact path to the server state JSON file.
+ROUGHDRAFT_STATE_DIR     Directory containing server.json.
 ```
 
 Development-only environment variables:
@@ -268,10 +255,12 @@ ROUGHDRAFT_DEV_WRAPPER_NAME
 ROUGHDRAFT_DEV_WRAPPER_PATH
 ROUGHDRAFT_DEV_WRAPPER_REPO_ROOT
 ```
-## Roughdraft-flavored CriticMarkup
-Roughdraft uses [CriticMarkup](https://criticmarkup.com) as the readable review layer inside normal Markdown files. It supports the standard markers for comments, highlights, insertions, deletions, and substitutions:
 
-The canonical Roughdraft Flavored Markdown spec is published at [roughdraft.md/spec/roughdraft-flavored-markdown.md](https://roughdraft.md/spec/roughdraft-flavored-markdown.md). The review-index JSON Schema is published at [roughdraft.md/spec/roughdraft-flavored-markdown.schema.json](https://roughdraft.md/spec/roughdraft-flavored-markdown.schema.json).
+## Roughdraft Flavored Markdown
+
+CoCanvas uses [CriticMarkup](https://criticmarkup.com) as the readable review
+layer inside normal Markdown files, with the Roughdraft attribute-block
+extension for ids, authors, timestamps, and reply links.
 
 ```markdown
 This is {--deleted--} text.
@@ -280,23 +269,6 @@ This is {~~old~>new~~} substituted text.
 This is {>>a comment<<} in the margin.
 This is {==highlighted==} text.
 ```
-
-Roughdraft extends those markers with compact attribute blocks so review state can round-trip through the file. Attribute blocks are written immediately after the comment or suggestion:
-
-```markdown
-Please revisit {==this sentence==}{>>Needs a source<<}{id="c1" by="user" at="2026-04-28T12:00:00.000Z"}.
-```
-
-Supported attributes:
-
-- `id` gives the comment or suggested change a stable document-local id.
-  
-- `by` records the reviewer or agent that created it.
-  
-- `at` records an ISO timestamp.
-  
-- `re` links a reply to another comment or suggestion id.
-  
 
 Replies are stored as additional comment blocks that point at the parent id:
 
@@ -312,31 +284,23 @@ Remove {--vague phrasing--}{id="s2" by="user" at="2026-04-28T12:13:00.000Z"}.
 Use {~~rough~>specific~~}{id="s3" by="AI" at="2026-04-28T12:14:00.000Z"} wording.
 ```
 
-CriticMarkup inside inline code and fenced code blocks is treated as literal example text, not live review feedback:
+CriticMarkup inside inline code and fenced code blocks is treated as literal
+example text, not live review feedback.
 
-````markdown
-Inline code stays literal: `{==not a comment==}`.
+## Project status
 
-```text
-{++not a suggestion++}
-```
-````
+CoCanvas is an MVP. Markdown review is the stable surface. HTML review is
+experimental and tracked by `docs/adr/0005-html-review-annotation-contract.md`
+and the granular plan under `.context/`.
 
-This matters because the main workflow is often:
+## Credits
 
-- The AI writes a doc
-  
-- The user opens it in Roughdraft
-  
-- The user leaves comments and suggested changes
-  
-- The AI reads those comments and responds in the same markdown file
-  
-## Try the demo
-Don't want to install anything? Try the [live demo](https://roughdraft.md) — it runs entirely in your browser using local storage.
+CoCanvas is built by Ananth Dabhi on top of the original
+[Roughdraft](https://github.com/Lex-Inc/roughdraft) project by
+[Nathan Baschez](https://twitter.com/nbashaw) at Lex Inc. The CriticMarkup
+review syntax and the Roughdraft Flavored Markdown spec are upstream work and
+are used here under the terms of the MIT license.
+
 ## License
-MIT
 
-* * *
-
-Built by [Nathan Baschez](https://twitter.com/nbashaw)
+MIT. See [LICENSE](./LICENSE) and [NOTICE](./NOTICE).

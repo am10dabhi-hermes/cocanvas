@@ -1,14 +1,15 @@
 {
-  "name": "roughdraft",
+  "name": "cocanvas",
   "version": "0.1.8",
-  "description": "A local markdown review app",
+  "description": "CoCanvas — a local-first collaborative canvas for reviewing Markdown and HTML documents with your AI agent. Inspired by Roughdraft.",
   "license": "MIT",
-  "author": "Nathan Baschez",
+  "author": "Ananth Dabhi",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Lex-Inc/roughdraft.git"
+    "url": "git+https://github.com/am10dabhi-hermes/cocanvas.git"
   },
   "bin": {
+    "cocanvas": "./packages/server/bin/cocanvas.mjs",
     "roughdraft": "./packages/server/bin/roughdraft.mjs"
   },
   "scripts": {
@@ -28,7 +29,7 @@
     "test:coverage": "pnpm --filter @roughdraft/app exec vitest run --coverage && pnpm --filter @roughdraft/server exec vitest run --coverage",
     "check": "pnpm lint && pnpm test:selectors && pnpm test && pnpm build",
     "build": "pnpm --filter @roughdraft/rfm build && pnpm --filter @roughdraft/app build && pnpm --filter @roughdraft/server build",
-    "preview": "node packages/server/bin/roughdraft.mjs open README.md"
+    "preview": "node packages/server/bin/cocanvas.mjs open README.md"
   },
   "files": [
     "packages/app/dist",
@@ -37,7 +38,9 @@
     "packages/server/dist",
     "packages/server/bin",
     "packages/server/defaults.mjs",
-    "packages/server/defaults.d.mts"
+    "packages/server/defaults.d.mts",
+    "LICENSE",
+    "NOTICE"
   ],
   "dependencies": {
     "@roughdraft/rfm": "file:packages/rfm",
@@ -50,10 +53,5 @@
     "knip": "^6.7.0",
     "tsx": "^4.21.0",
     "typescript": "^5.8.3"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild"
-    ]
   }
 }

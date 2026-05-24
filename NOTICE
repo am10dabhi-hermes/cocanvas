@@ -1,0 +1,34 @@
+CoCanvas
+========
+
+CoCanvas is a local-first collaborative canvas for reviewing Markdown and HTML
+documents with an AI agent.
+
+Attribution
+-----------
+
+CoCanvas began as a fork of Roughdraft, the local-first Markdown review app
+built by Nathan Baschez at Lex Inc. and released under the MIT license.
+
+  Upstream project: https://github.com/Lex-Inc/roughdraft
+  Author:           Nathan Baschez (https://twitter.com/nbashaw)
+
+Substantial portions of CoCanvas — including the Roughdraft Flavored Markdown
+specification, the CriticMarkup parser, the local server CLI, and the review
+UI — derive from that original work. The original copyright and MIT license
+text are reproduced in LICENSE.
+
+CoCanvas extends the original with experimental HTML review support, including
+the HTML annotation contract recorded in
+`docs/adr/0005-html-review-annotation-contract.md`, the corresponding MCP
+tools, and related editor changes. New work on top of Roughdraft is also
+released under the MIT license.
+
+Internal package names
+----------------------
+
+CoCanvas keeps the original `@roughdraft/*` workspace package names
+(`@roughdraft/app`, `@roughdraft/server`, `@roughdraft/rfm`, `@roughdraft/skill`)
+to minimise churn against the upstream history. The `cocanvas` CLI binary is
+the primary entry point; a `roughdraft` alias is preserved for compatibility
+with existing scripts and agent instructions.
