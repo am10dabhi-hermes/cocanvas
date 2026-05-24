@@ -73,6 +73,11 @@ npm i -g cocanvas
 cocanvas start
 ```
 
+Want Claude Code to install CoCanvas for you? Share the raw URL of
+[`INSTALL_WITH_CLAUDE.md`](./INSTALL_WITH_CLAUDE.md) with Claude Code and ask
+it to read the file and install CoCanvas — that guide is written so Claude
+Code can handle prerequisites, install, and a smoke test in one go.
+
 `cocanvas start` runs the server in the background, reuses or chooses a free
 localhost port, writes server state to `~/.roughdraft/server.json`, prints the
 active URL, and exits while the server keeps running. (The on-disk state
