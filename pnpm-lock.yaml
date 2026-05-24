@@ -184,6 +184,9 @@ importers:
       express:
         specifier: ^5.1.0
         version: 5.2.1
+      undici:
+        specifier: ^7.25.0
+        version: 7.25.0
     devDependencies:
       '@types/express':
         specifier: ^5.0.0

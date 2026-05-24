@@ -547,6 +547,10 @@ export function createApp(options: CreateAppOptions = {}): CreateAppResult {
     return resolvedProjectDir;
   }
 
+  function isReviewableDocumentPath(absolutePath: string): boolean {
+    return /\.(md|html?)$/i.test(absolutePath);
+  }
+
   function markdownPathFromRequest(
     req: Request,
     res: Response,
@@ -562,7 +566,7 @@ export function createApp(options: CreateAppOptions = {}): CreateAppResult {
           : "";
     const absolutePath = ensureProjectPath(projectDir, relativePath);
 
-    if (!absolutePath?.toLowerCase().endsWith(".md")) {
+    if (!absolutePath || !isReviewableDocumentPath(absolutePath)) {
       res.status(404).json({ error: "Markdown file not found" });
       return null;
     }

@@ -13,6 +13,7 @@
     "roughdraft": "./packages/server/bin/roughdraft.mjs"
   },
   "scripts": {
+    "dev:setup": "./scripts/setup.sh",
     "setup": "./scripts/setup.sh",
     "start": "./scripts/run.sh",
     "dev": "node scripts/dev.mjs",

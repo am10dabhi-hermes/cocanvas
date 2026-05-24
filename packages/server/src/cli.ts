@@ -5,6 +5,7 @@ import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { setTimeout as sleep } from "node:timers/promises";
+import { Agent } from "undici";
 import {
   type RfmDiagnostic,
   validateRoughdraftMarkdown,
@@ -113,6 +114,7 @@ export interface CliDependencies {
   env: NodeJS.ProcessEnv;
   cwd: string;
   fetchImpl: typeof fetch;
+  watchDispatcher?: unknown;
   findAvailablePortImpl: typeof findAvailablePort;
   sleepImpl: (ms: number) => Promise<void>;
   spawnServerProcess: (options: {
@@ -758,6 +760,18 @@ function defaultSpawnServerProcess(options: {
   return { pid: child.pid };
 }
 
+let cachedWatchDispatcher: unknown;
+
+function getDefaultWatchDispatcher(): unknown {
+  if (cachedWatchDispatcher === undefined) {
+    cachedWatchDispatcher = new Agent({
+      headersTimeout: 0,
+      bodyTimeout: 0,
+    });
+  }
+  return cachedWatchDispatcher;
+}
+
 export function createCliDependencies(
   overrides: Partial<CliDependencies> = {},
 ): CliDependencies {
@@ -768,6 +782,10 @@ export function createCliDependencies(
     env: overrides.env ?? process.env,
     cwd: overrides.cwd ?? process.cwd(),
     fetchImpl,
+    watchDispatcher:
+      overrides.watchDispatcher !== undefined
+        ? overrides.watchDispatcher
+        : getDefaultWatchDispatcher(),
     findAvailablePortImpl: overrides.findAvailablePortImpl ?? findAvailablePort,
     sleepImpl: overrides.sleepImpl ?? ((ms) => sleep(ms)),
     spawnServerProcess:
@@ -805,12 +823,12 @@ function printHelp(log: (message: string) => void, naming = DEFAULT_NAMING) {
   log("");
   log("Commands:");
   log(
-    "  open <path>        Open a Markdown or HTML file and wait for Done Reviewing",
+    "  open <path>        Open a Markdown or HTML file and wait for I'm done",
   );
   log("  start              Start or reuse the background server");
   log("  status             Show server status");
   log("  stop               Stop the managed background server");
-  log("  watch <path>       Wait for a Done Reviewing event");
+  log("  watch <path>       Wait for an I'm done event");
   log("  mcp                Start the experimental stdio MCP server");
   log("  doctor [path]      Diagnose setup or validate Markdown");
   log("  help agent         Print the agent setup prompt");
@@ -849,7 +867,7 @@ function printCommandHelp(
     );
     log("");
     log(
-      "Opens one Markdown or HTML file and waits for Done Reviewing. Starts Roughdraft if needed.",
+      "Opens one Markdown or HTML file and waits for I'm done. Starts Roughdraft if needed.",
     );
     log("");
     log("Flags:");
@@ -937,7 +955,7 @@ function printCommandHelp(
     log(`  ${naming.programName} watch <path> [--json] [--timeout <seconds>]`);
     log("");
     log(
-      "Waits until Roughdraft receives Done Reviewing for one Markdown file.",
+      "Waits until Roughdraft receives an I'm done event for one Markdown file.",
     );
     log("");
     log("Flags:");
@@ -2106,11 +2124,49 @@ async function runWatch(
       ...(options.timeoutSeconds !== undefined
         ? { signal: AbortSignal.timeout((options.timeoutSeconds + 5) * 1000) }
         : {}),
+      ...(deps.watchDispatcher !== undefined
+        ? ({ dispatcher: deps.watchDispatcher } as RequestInit)
+        : {}),
     },
   );
 
   if (!response.ok) {
-    throw new Error(`Failed to watch review events: ${response.status}`);
+    let serverError: string | null = null;
+    try {
+      const parsed = (await response.json()) as { error?: unknown };
+      if (typeof parsed?.error === "string") {
+        serverError = parsed.error;
+      }
+    } catch {}
+
+    const displayPath = relativeDisplayPath(deps.cwd, target.openPath);
+    const extension = path.extname(target.openPath).toLowerCase();
+    const isHtmlLike = extension === ".html" || extension === ".htm";
+
+    let message: string;
+    if (response.status === 404 && serverError === "Markdown file not found") {
+      if (isHtmlLike) {
+        message = `HTML review-handoff is not supported by the server at this address (404 for ${displayPath}). Confirm the server build supports HTML, or convert the file to .md and retry.`;
+      } else {
+        message = `File not found for review: ${displayPath} (server returned 404).`;
+      }
+    } else if (serverError) {
+      message = `Failed to start review watch for ${displayPath}: ${serverError} (HTTP ${response.status}).`;
+    } else {
+      message = `Failed to start review watch for ${displayPath} (HTTP ${response.status}).`;
+    }
+
+    if (json) {
+      emitJson(deps.log, {
+        ok: false,
+        status: response.status,
+        error: serverError ?? message,
+        path: target.openPath,
+      });
+    } else {
+      deps.error(message);
+    }
+    return 1;
   }
 
   const payload = (await response.json()) as {
@@ -2738,7 +2794,7 @@ export async function runCli(
           } else {
             deps.log(`Roughdraft is running at ${targetUrl}`);
           }
-          deps.log("Waiting for Done Reviewing...");
+          deps.log("Waiting for I'm done...");
         }
 
         const watchOptions: ParsedWatchOptions = {

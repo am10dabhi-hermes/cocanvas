@@ -16,6 +16,27 @@ export default defineConfig(() => {
     build: {
       outDir: "dist",
       chunkSizeWarningLimit: 1000,
+      rollupOptions: {
+        output: {
+          manualChunks(id: string) {
+            if (!id.includes("node_modules")) return undefined;
+            if (/node_modules\/(react|react-dom|scheduler)\//.test(id)) {
+              return "react-vendor";
+            }
+            if (/node_modules\/(@codemirror|codemirror)\//.test(id)) {
+              return "codemirror-vendor";
+            }
+            if (
+              /node_modules\/(@tiptap|prosemirror-[^/]+|@joplin\/turndown-plugin-gfm|turndown|marked)\//.test(
+                id,
+              )
+            ) {
+              return "editor-vendor";
+            }
+            return undefined;
+          },
+        },
+      },
     },
     server: {
       proxy: {

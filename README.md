@@ -122,7 +122,7 @@ That makes an agent-friendly workflow possible:
 2. You tell it to open the file in CoCanvas.
 3. CoCanvas opens locally on your machine.
 4. You read, edit, leave comments, and suggest changes.
-5. You click **Done Reviewing**, and the agent picks up where you left off.
+5. You click **I'm done**, and the agent picks up where you left off.
 
 Agents can watch that handoff directly:
 
@@ -199,11 +199,11 @@ cocanvas <path>
 Commands:
 
 ```text
-open <path>        Open one Markdown or HTML file and wait for Done Reviewing
+open <path>        Open one Markdown or HTML file and wait for I'm done
 start              Start or reuse the background server
 status             Show server status
 stop               Stop the managed background server
-watch <path>       Wait for a Done Reviewing event
+watch <path>       Wait for an I'm done event
 mcp                Start the experimental stdio MCP server
 doctor [path]      Diagnose setup or validate a document
 help agent         Print the agent setup prompt

@@ -88,6 +88,11 @@ function buildWrapperContent({
   return [
     "#!/usr/bin/env bash",
     `# roughdraft-dev-repo-root=${repoRoot}`,
+    `if [[ ! -f ${shellDoubleQuote(cliEntryPath)} ]]; then`,
+    `  printf '%s %s\\n' "CoCanvas dev wrapper points to a missing checkout:" ${shellDoubleQuote(repoRoot)} >&2`,
+    "  printf '%s\\n' \"re-run \\`pnpm dev:install-cli\\` from the current checkout to refresh this wrapper.\" >&2",
+    "  exit 1",
+    "fi",
     `if [[ -z "\${ROUGHDRAFT_STATE_DIR:-}" ]]; then export ROUGHDRAFT_STATE_DIR=${shellDoubleQuote(stateDir)}; fi`,
     `export ROUGHDRAFT_DEV_WRAPPER_NAME=${shellDoubleQuote(commandName)}`,
     `export ROUGHDRAFT_DEV_WRAPPER_PATH=${shellDoubleQuote(wrapperPath)}`,

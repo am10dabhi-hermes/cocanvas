@@ -835,6 +835,133 @@ describe("cli", () => {
     expect(test.logs.join("\n")).toContain("mcp");
   });
 
+  it("prints a clean error and exits non-zero when the watch endpoint returns 404", async () => {
+    const test = createTestDependencies();
+    const documentPath = path.join(projectDir, "draft.md");
+    fs.writeFileSync(documentPath, "# Draft\n");
+
+    const deps = {
+      ...test.deps,
+      fetchImpl: (async (
+        input: Parameters<typeof fetch>[0],
+        init?: RequestInit,
+      ) => {
+        const url =
+          input instanceof URL
+            ? input
+            : new URL(
+                typeof input === "string" ? input : (input as Request).url,
+                "http://localhost",
+              );
+        if (url.pathname === "/api/review-events/watch") {
+          return new Response(
+            JSON.stringify({ error: "Markdown file not found" }),
+            { status: 404, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        return test.deps.fetchImpl(input, init);
+      }) as typeof fetch,
+    };
+
+    const exitCode = await runCli(
+      ["watch", documentPath, "--batch-window", "0"],
+      deps,
+    );
+
+    expect(exitCode).not.toBe(0);
+    expect(test.errors.join("\n")).toMatch(/not found|not supported/i);
+    expect(test.errors.join("\n")).not.toMatch(/at runWatch/);
+    expect(test.errors.join("\n")).not.toMatch(
+      /^Error: Failed to watch review events: 404$/m,
+    );
+
+    const jsonTest = createTestDependencies();
+    fs.writeFileSync(documentPath, "# Draft\n");
+    const jsonDeps = {
+      ...jsonTest.deps,
+      fetchImpl: (async (
+        input: Parameters<typeof fetch>[0],
+        init?: RequestInit,
+      ) => {
+        const url =
+          input instanceof URL
+            ? input
+            : new URL(
+                typeof input === "string" ? input : (input as Request).url,
+                "http://localhost",
+              );
+        if (url.pathname === "/api/review-events/watch") {
+          return new Response(
+            JSON.stringify({ error: "Markdown file not found" }),
+            { status: 404, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        return jsonTest.deps.fetchImpl(input, init);
+      }) as typeof fetch,
+    };
+    const jsonExit = await runCli(
+      ["watch", documentPath, "--json", "--batch-window", "0"],
+      jsonDeps,
+    );
+    expect(jsonExit).not.toBe(0);
+    const jsonLine = jsonTest.logs.find((line) => line.trim().startsWith("{"));
+    expect(jsonLine).toBeDefined();
+    const parsed = JSON.parse(jsonLine ?? "{}") as {
+      ok?: boolean;
+      error?: string;
+    };
+    expect(parsed.ok).toBe(false);
+    expect(parsed.error).toMatch(/not found|not supported/i);
+  });
+
+  it("passes an undici dispatcher with disabled timeouts to long-poll watch fetches", async () => {
+    const test = createTestDependencies();
+    const documentPath = path.join(projectDir, "draft.md");
+    fs.writeFileSync(documentPath, "# Draft\n");
+
+    let dispatcherSeen: unknown;
+    const deps = {
+      ...test.deps,
+      fetchImpl: (async (
+        input: Parameters<typeof fetch>[0],
+        init?: RequestInit & { dispatcher?: unknown },
+      ) => {
+        const url =
+          input instanceof URL
+            ? input
+            : new URL(
+                typeof input === "string" ? input : (input as Request).url,
+                "http://localhost",
+              );
+        if (url.pathname === "/api/review-events/watch") {
+          dispatcherSeen = (init as { dispatcher?: unknown } | undefined)
+            ?.dispatcher;
+          return new Response(
+            JSON.stringify({ events: [], timedOut: true, nextSequence: 0 }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        return test.deps.fetchImpl(input, init);
+      }) as typeof fetch,
+    };
+
+    await runCli(
+      [
+        "watch",
+        documentPath,
+        "--json",
+        "--timeout",
+        "1",
+        "--batch-window",
+        "0",
+      ],
+      deps,
+    );
+
+    expect(dispatcherSeen).toBeDefined();
+    expect(dispatcherSeen).not.toBeNull();
+  });
+
   it("waits for a review completed event from watch --json", async () => {
     const test = createTestDependencies();
     const documentPath = path.join(projectDir, "draft.md");
@@ -944,6 +1071,30 @@ describe("cli", () => {
       batchWindowSeconds: 0,
     });
     expect(watchRequestBody).not.toHaveProperty("timeoutSeconds");
+
+    let watcherActive = false;
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      const statusResponse = await fetch(
+        `http://localhost:${persisted?.port}/api/review-events/status?` +
+          new URLSearchParams({
+            projectPath: projectDir,
+            path: "draft.md",
+          }).toString(),
+      );
+      if (statusResponse.ok) {
+        const status = (await statusResponse.json()) as {
+          watching: boolean;
+          watcherCount: number;
+        };
+        if (status.watching && status.watcherCount > 0) {
+          watcherActive = true;
+          break;
+        }
+      }
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    expect(watcherActive).toBe(true);
+
     await fetch(`http://localhost:${persisted?.port}/api/review-events`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2102,5 +2253,129 @@ describe("runCli open in remote mode", () => {
       await browserEventsReader?.cancel().catch(() => undefined);
       await remote.close();
     }
+  });
+});
+
+describe("install and package-script documentation", () => {
+  const repoRoot = path.resolve(
+    fileURLToPath(new URL("../../..", import.meta.url)),
+  );
+  const installGuide = fs.readFileSync(
+    path.join(repoRoot, "INSTALL_WITH_CLAUDE.md"),
+    "utf8",
+  );
+  const readme = fs.readFileSync(path.join(repoRoot, "README.md"), "utf8");
+  const rootPkg = JSON.parse(
+    fs.readFileSync(path.join(repoRoot, "package.json"), "utf8"),
+  ) as { scripts?: Record<string, string> };
+
+  function indexOfSourceCheckoutSection(text: string): number {
+    const match = text.match(/git clone[^\n]*cocanvas/);
+    return match?.index ?? -1;
+  }
+
+  // B5 — npm `cocanvas` is not published yet, so the source checkout must be
+  // the documented primary install path.
+  it("documents source checkout as the primary install path because the npm package is not published yet", () => {
+    expect(installGuide).not.toMatch(
+      /Published package path[^\n]*\(try this first\)/i,
+    );
+    expect(installGuide).toMatch(
+      /cocanvas[^\n]{0,120}(not (yet )?published|not on npm|unpublished)/i,
+    );
+
+    const sourceIdx = indexOfSourceCheckoutSection(installGuide);
+    const publishedIdx = installGuide.search(/npm i -g cocanvas/);
+    expect(sourceIdx).toBeGreaterThanOrEqual(0);
+    if (publishedIdx !== -1) {
+      expect(sourceIdx).toBeLessThan(publishedIdx);
+    }
+  });
+
+  // B8 — pnpm is required (or corepack-authorized) since the source path is
+  // the only working install path today.
+  it("treats pnpm as required (or authorizes corepack) for the documented install path", () => {
+    expect(installGuide).not.toMatch(
+      /only required for the source-checkout path/i,
+    );
+    const requiresPnpm = /pnpm[^\n]{0,80}(required|prerequisite)/i.test(
+      installGuide,
+    );
+    const corepackAuthorized = /corepack enable pnpm/i.test(installGuide);
+    expect(requiresPnpm || corepackAuthorized).toBe(true);
+  });
+
+  // B2 — the smoke-review handoff command must not use `--print-url`, which
+  // silently disables the watcher and hides the I'm-done button.
+  it("does not pair --print-url with the I'm-done click handoff instruction", () => {
+    let cursor = 0;
+    while (cursor < installGuide.length) {
+      const found = installGuide.indexOf("--print-url", cursor);
+      if (found === -1) break;
+      const window = installGuide.slice(found, found + 600);
+      expect(window).not.toMatch(
+        /click[\s\S]{0,40}(?:\*\*)?(?:I'm done|Done Reviewing)(?:\*\*)?/i,
+      );
+      cursor = found + 1;
+    }
+  });
+
+  it("uses a watcher-enabled command for the smoke-test review handoff", () => {
+    const handoffMatch = installGuide.match(
+      /click[^\n]{0,40}\*\*I'm done\*\*/i,
+    );
+    expect(handoffMatch?.index).toBeDefined();
+    const handoffIdx = handoffMatch?.index ?? -1;
+    const start = Math.max(0, handoffIdx - 800);
+    const handoffWindow = installGuide.slice(start, handoffIdx + 100);
+
+    // The command preceding the click instruction must enable the watcher:
+    // either `cocanvas open ... --json` or a bare `cocanvas open <path>` line
+    // without `--print-url` and without `--no-watch`.
+    const watcherCommand =
+      /cocanvas open [^\n]*--json|cocanvas open [^\n`]*\$SAMPLE_FILE(?![^\n]*--print-url)(?![^\n]*--no-watch)/;
+    expect(handoffWindow).toMatch(watcherCommand);
+  });
+
+  it("documents --print-url separately as URL-only with no review handoff", () => {
+    expect(installGuide).toMatch(
+      /--print-url[\s\S]{0,400}(URL[- ]only|no (review )?handoff|no watcher|does not (wait|register a watcher)|skips the watcher)/i,
+    );
+  });
+
+  // B4 — repo docs canonicalize on "I'm done".
+  it("never refers to the handoff button as 'Done Reviewing' in install guide or README", () => {
+    expect(installGuide).not.toMatch(/Done Reviewing/);
+    expect(readme).not.toMatch(/Done Reviewing/);
+  });
+
+  it('refers to the handoff button as "I\'m done" in the install guide', () => {
+    expect(installGuide).toMatch(/I'm done/);
+  });
+
+  // B6 — `pnpm setup` collides with pnpm's builtin. Expose an unambiguous
+  // source-setup script and use it in the install guide.
+  it("exposes an unambiguous source setup script (dev:setup or bootstrap)", () => {
+    const scripts = rootPkg.scripts ?? {};
+    const hasUnambiguous = "dev:setup" in scripts || "bootstrap" in scripts;
+    expect(hasUnambiguous).toBe(true);
+  });
+
+  it("preserves `setup` as a compatibility alias when dev:setup or bootstrap exists", () => {
+    const scripts = rootPkg.scripts ?? {};
+    if ("dev:setup" in scripts || "bootstrap" in scripts) {
+      expect(scripts.setup).toBeDefined();
+    }
+  });
+
+  it("uses the unambiguous source-setup command in the install guide", () => {
+    const sourceIdx = indexOfSourceCheckoutSection(installGuide);
+    expect(sourceIdx).toBeGreaterThanOrEqual(0);
+    const sourceSection = installGuide.slice(sourceIdx, sourceIdx + 1500);
+
+    expect(sourceSection).toMatch(/pnpm (dev:setup|bootstrap)/);
+    // The bare `pnpm setup` command must not be the install instruction in
+    // the source-checkout block.
+    expect(sourceSection).not.toMatch(/^\s*pnpm setup\s*$/m);
   });
 });

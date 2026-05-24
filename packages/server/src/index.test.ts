@@ -354,6 +354,103 @@ describe("createApp", () => {
     });
   });
 
+  it("accepts review completed events for an HTML file inside the project", async () => {
+    fs.writeFileSync(
+      path.join(projectDir, "page.html"),
+      "<!doctype html><h1>hi</h1>",
+    );
+    const { app } = createApp({
+      homeDir,
+      staticDirPath: projectDir,
+    });
+
+    const response = await request(app)
+      .post("/api/review-events")
+      .send({ projectPath: projectDir, path: "page.html" });
+
+    expect(response.status).toBe(201);
+    expect(response.body).toMatchObject({
+      event: {
+        type: "review.completed",
+        documentPath: path.join(projectDir, "page.html"),
+        relativePath: "page.html",
+      },
+    });
+  });
+
+  it("watches review events for an HTML file", async () => {
+    fs.writeFileSync(
+      path.join(projectDir, "page.html"),
+      "<!doctype html><h1>hi</h1>",
+    );
+    const { app } = createApp({
+      homeDir,
+      staticDirPath: projectDir,
+    });
+
+    await request(app)
+      .post("/api/review-events")
+      .send({ projectPath: projectDir, path: "page.html" });
+
+    const watchResponse = await request(app)
+      .post("/api/review-events/watch")
+      .send({
+        projectPath: projectDir,
+        path: "page.html",
+        fromNow: false,
+        timeoutSeconds: 1,
+        batchWindowSeconds: 0,
+      });
+
+    expect(watchResponse.status).toBe(200);
+    expect(watchResponse.body).toMatchObject({
+      timedOut: false,
+      events: [
+        {
+          type: "review.completed",
+          documentPath: path.join(projectDir, "page.html"),
+          relativePath: "page.html",
+        },
+      ],
+    });
+  });
+
+  it("reports active review watchers for an HTML file", async () => {
+    fs.writeFileSync(
+      path.join(projectDir, "page.html"),
+      "<!doctype html><h1>hi</h1>",
+    );
+    const { app } = createApp({
+      homeDir,
+      staticDirPath: projectDir,
+    });
+
+    const waiting = request(app).post("/api/review-events/watch").send({
+      projectPath: projectDir,
+      path: "page.html",
+      timeoutSeconds: 1,
+      batchWindowSeconds: 0,
+    });
+    const waitingPromise = waiting.then((response) => response);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    const statusResponse = await request(app)
+      .get("/api/review-events/status")
+      .query({ projectPath: projectDir, path: "page.html" });
+
+    expect(statusResponse.status).toBe(200);
+    expect(statusResponse.body).toMatchObject({
+      watching: true,
+      watcherCount: 1,
+      documentPath: path.join(projectDir, "page.html"),
+    });
+
+    await request(app)
+      .post("/api/review-events")
+      .send({ projectPath: projectDir, path: "page.html" });
+    await waitingPromise;
+  });
+
   it("reports active review watchers for a markdown file", async () => {
     fs.writeFileSync(path.join(projectDir, "draft.md"), "# Draft\n");
     const { app } = createApp({

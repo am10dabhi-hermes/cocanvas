@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -131,5 +132,30 @@ describe("installDevCli", () => {
     expect(warnings).toContain(
       `${binDir} is not on PATH. Invoke the wrapper with its full path or add that directory to your shell PATH.`,
     );
+  });
+
+  it("fails clearly when the worktree-bound wrapper points at a moved checkout", () => {
+    const { repoRoot, tempDir } = createFixtureRepo("lyon-v2");
+    const binDir = path.join(tempDir, "bin");
+
+    const result = installDevCli({
+      binDir,
+      env: { PATH: binDir },
+      repoRoot,
+      warn: () => {},
+    });
+
+    fs.rmSync(repoRoot, { recursive: true, force: true });
+
+    const run = spawnSync(result.wrapperPath, ["--version"], {
+      encoding: "utf8",
+    });
+
+    expect(run.status).not.toBe(0);
+    expect(run.stderr).toContain(
+      "CoCanvas dev wrapper points to a missing checkout",
+    );
+    expect(run.stderr).toContain(repoRoot);
+    expect(run.stderr).toContain("re-run `pnpm dev:install-cli`");
   });
 });

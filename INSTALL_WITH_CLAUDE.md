@@ -40,7 +40,8 @@ to open a file for review.
 
 Claude Code: when you see that prompt, follow this file end-to-end, then in
 your final message report (1) the final command the user should use and (2)
-which install path you took (published npm package or source checkout).
+which install path you took (source checkout — currently the only working
+path — or the future published-package path).
 
 ---
 
@@ -52,70 +53,56 @@ user what to install and stop — do not try to install Node or Git for them.
 ```bash
 node --version     # expect v20+ (v22 LTS is ideal)
 npm --version      # expect 10+
-pnpm --version     # expect 9+; only required for the source-checkout path
+pnpm --version     # required — see "Install pnpm" below
 git --version      # any modern version is fine
 ```
+
+**pnpm is a required prerequisite** for the current install path. If
+`pnpm --version` is missing, you (Claude Code) are authorized to install it
+via Node's built-in `corepack`, which does not require sudo:
+
+```bash
+corepack enable pnpm
+corepack prepare pnpm@latest --activate
+pnpm --version
+```
+
+If corepack itself is missing (rare on Node 16.13+), fall back to
+`npm i -g pnpm` and ask the user before using `sudo`.
 
 Claude Code authentication is assumed (you are already running). If the user
 is not signed in, point them at `https://claude.com/claude-code` and stop.
 
 **Decision rule:**
 
-- Node + npm present → try the **published package path** first.
-- If that fails (package not yet published, network issue, permissions error
-  on global install), fall back to the **source checkout path**.
+- Default to the **source checkout path** below. The npm package
+  `cocanvas` is not yet published, so the source checkout is the only
+  install path that currently works.
+- The **published package path** is documented further down for the future
+  state when `cocanvas` is on npm.
 
 ---
 
-## Step 2a — Published package path (try this first)
+## Step 2a — Source checkout (primary path, try this first)
 
-```bash
-npm i -g cocanvas
-```
-
-If the global install needs elevated permissions on this system, prefer one of
-these over `sudo npm i -g`:
-
-- Use a Node version manager (nvm, fnm, volta) so global installs go into the
-  user directory.
-- Or set an npm prefix the user owns: `npm config get prefix` and confirm it
-  is writable.
-
-Do not run `sudo npm i -g` without asking the user first.
-
-Verify the binary is on `PATH`:
-
-```bash
-cocanvas --version
-cocanvas help agent
-```
-
-`cocanvas help agent` prints the canonical agent setup prompt — it is a good
-signal that the CLI is wired up correctly.
-
-If `cocanvas --version` fails with "command not found" after a successful
-`npm i -g`, tell the user the install directory (`npm prefix -g` + `/bin`)
-and ask them to add it to `PATH`. Do not silently edit shell rc files.
-
-Then jump to **Step 3 — Smoke test**.
-
----
-
-## Step 2b — Source checkout fallback path
-
-Use this when `npm i -g cocanvas` fails, when the package is not yet
-published, or when the user explicitly wants the development build.
+Use this path by default. It is the only install path that currently works
+because the `cocanvas` npm package is not yet published.
 
 ```bash
 git clone https://github.com/am10dabhi-hermes/cocanvas.git
 cd cocanvas
-pnpm setup
+pnpm dev:setup
 ```
 
-`pnpm setup` installs workspace dependencies, builds the app and server, and
-installs a per-worktree dev CLI wrapper into `~/.local/bin` named
+`pnpm dev:setup` installs workspace dependencies, builds the app and server,
+and installs a per-worktree dev CLI wrapper into `~/.local/bin` named
 `roughdraft-dev-<worktree-name>` (the wrapper keeps the `roughdraft-dev-`
 prefix for compatibility with internal docs).
+
+> The repo also keeps `pnpm setup` as a compatibility alias that runs the
+> same script, but `pnpm setup` collides with pnpm's own builtin on a fresh
+> machine that has never run pnpm before. Use `pnpm dev:setup` for new
+> installs and treat `pnpm setup` as a legacy alias.
 
 Derive the wrapper name for this checkout:
 
@@ -147,6 +134,41 @@ pnpm check
 production build. It can take a few minutes — skip it if the user just wants
 to try CoCanvas, and run it before any code change.
 
+Then jump to **Step 3 — Smoke test**.
+
+---
+
+## Step 2b — Published package path (when available)
+
+This path does not work yet because the `cocanvas` npm package is not
+published. Try it only if the user explicitly asks, or after a release
+publishes `cocanvas` to npm:
+
+```bash
+npm i -g cocanvas
+```
+
+If the global install needs elevated permissions on this system, prefer one of
+these over `sudo npm i -g`:
+
+- Use a Node version manager (nvm, fnm, volta) so global installs go into the
+  user directory.
+- Or set an npm prefix the user owns: `npm config get prefix` and confirm it
+  is writable.
+
+Do not run `sudo npm i -g` without asking the user first.
+
+Verify the binary is on `PATH`:
+
+```bash
+cocanvas --version
+cocanvas help agent
+```
+
+If `npm i -g cocanvas` fails with `E404` (the expected outcome today since
+the package is not yet published), fall back to the source checkout path in
+Step 2a and continue from there.
+
 ---
 
 ## Step 3 — Smoke test with a local sample document
@@ -167,27 +189,33 @@ EOF
 echo "Sample at: $SAMPLE_FILE"
 ```
 
-Open the sample (use whichever command worked above — `cocanvas` for the
-published path, or `"$cocanvas_cmd"` for the source-checkout path):
-
-```bash
-cocanvas open "$SAMPLE_FILE" --print-url
-```
-
-`--print-url` returns the local URL without trying to open a browser, which is
-the right mode for an agent shell. The expected output is a single
-`http://localhost:7373/?path=…` URL on stdout. Tell the user to open that URL
-in their browser, leave a comment, and click **Done Reviewing**.
-
-You can also block the agent until the user finishes reviewing:
+Open the sample with the watcher enabled (use whichever command worked above
+— `cocanvas` for the published path, or `"$cocanvas_cmd"` for the
+source-checkout path):
 
 ```bash
 cocanvas open "$SAMPLE_FILE" --json
 ```
 
-That command exits with JSON describing the document path, file version, and
-feedback counts after the user clicks **Done Reviewing**. Use `--timeout
-<seconds>` to bound the wait.
+`--json` registers a fresh review-event watcher, prints the local
+`http://localhost:7373/?path=…` URL, and then blocks until the user clicks
+the **I'm done** button in the editor. When they do, the command exits with
+a JSON object describing the document path, file version, and feedback
+counts. Pass `--timeout <seconds>` to bound the wait.
+
+Tell the user to open the printed URL in their browser, leave a comment, and
+click **I'm done** when they are finished. The button only renders when a
+watcher is attached, which is what `--json` (or the default
+watcher-enabled `cocanvas open <path>`) sets up.
+
+### `--print-url` is URL-only, not a review-handoff command
+
+`cocanvas open <path> --print-url` is a separate mode for shells that just
+need the URL on stdout. It **skips the watcher**, so there is no review
+handoff and no handoff button renders in the editor. Do not use it for the
+smoke test above — there is no button to wait on. Reach for `--print-url`
+only when an upstream agent needs the URL and no review-handoff flow is
+required.
 
 Optional sanity check:
 
@@ -204,13 +232,14 @@ In your final message to the user, tell them the **one command** they should
 use to open a file for review from now on. Pick the right form based on which
 install path succeeded:
 
-- Published package path:
-  ```bash
-  cocanvas open ./path/to/file.md
-  ```
-- Source checkout path (substitute the wrapper name you derived):
+- Source checkout path (the path that works today — substitute the wrapper
+  name you derived):
   ```bash
   roughdraft-dev-<worktree-name> open ./path/to/file.md
+  ```
+- Published package path (once `cocanvas` is on npm):
+  ```bash
+  cocanvas open ./path/to/file.md
   ```
 
 Also remind the user that `cocanvas open` works on `.html` files too, and
@@ -223,14 +252,20 @@ that `cocanvas status` / `cocanvas stop` manage the background server.
 - **`cocanvas: command not found` after `npm i -g`** — the global npm prefix
   is not on `PATH`. Run `npm prefix -g`, append `/bin`, and ask the user to
   add that directory to their shell `PATH`.
+- **`E404` from `npm i -g cocanvas`** — expected today; the package is not
+  yet published. Fall back to the source checkout path in Step 2a.
 - **`EACCES` on `npm i -g`** — recommend a Node version manager (nvm, fnm,
   volta) instead of `sudo`.
 - **Port 7373 is busy** — pass `--port` to `cocanvas start`, or stop the
   conflicting process. `cocanvas status --json` reports the active port.
-- **`pnpm setup` fails on the source path** — run `pnpm install` and then
-  `pnpm build` separately; report the first failing step verbatim and stop.
-- **`cocanvas help agent` prints nothing** — the install is incomplete. Try
-  the source checkout path instead and report what you saw.
+- **`pnpm dev:setup` fails on the source path** — run `pnpm install` and
+  then `pnpm build` separately; report the first failing step verbatim and
+  stop.
+- **`pnpm setup` triggers pnpm's builtin instead of the repo script** — use
+  `pnpm dev:setup` instead. The repo keeps `setup` as a compatibility alias
+  but pnpm intercepts the bare name on a fresh install.
+- **`cocanvas help agent` prints nothing** — the install is incomplete.
+  Re-run `pnpm dev:setup` in the source checkout and report what you saw.
 
 ---
 
